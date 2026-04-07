@@ -253,7 +253,7 @@ class ScreenCapture:
             try:
                 os.remove(tmp)
             except OSError:
-                pass
+                                import logging as _log; _log.getLogger('desktop.computer_use').debug('Suppressed exception', exc_info=True)
         elif _PLATFORM == "Darwin":
             region_str = f"{x},{y},{w},{h}"
             result = await _run_subprocess(

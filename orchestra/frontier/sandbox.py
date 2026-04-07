@@ -691,7 +691,7 @@ class BrowserSandbox:
             content_length = int(headers.get("content-length", 0))
             self._bytes_downloaded += content_length
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('frontier.sandbox').debug('Suppressed exception', exc_info=True)
 
     async def _timeout_watchdog(self) -> None:
         """Wait for the configured timeout then stop the sandbox."""

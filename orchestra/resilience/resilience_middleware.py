@@ -276,7 +276,7 @@ class ResilientCall:
             try:
                 return await self._try_fallback(fn, outcome, t0, *args, **kwargs)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('resilience.resilience_middleware').debug('Suppressed exception', exc_info=True)
 
         # All recovery failed
         outcome.total_latency_ms = (time.monotonic() - t0) * 1000

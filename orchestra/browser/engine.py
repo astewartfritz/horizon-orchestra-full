@@ -173,7 +173,7 @@ class BrowserEngine:
             try:
                 await handle._page.close()
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('browser.engine').debug('Suppressed exception', exc_info=True)
             return True
         return False
 

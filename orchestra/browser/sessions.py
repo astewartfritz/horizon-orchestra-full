@@ -89,7 +89,7 @@ class BrowserSession:
                         created_at=g.get("created_at", time.time()),
                     )
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('browser.sessions').debug('Suppressed exception', exc_info=True)
 
     def _save_meta(self) -> None:
         data = {

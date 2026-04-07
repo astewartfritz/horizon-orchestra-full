@@ -164,7 +164,7 @@ class XLSXGenerator:
                     if cell_len > max_length:
                         max_length = cell_len
                 except Exception:
-                    pass
+                                        import logging as _log; _log.getLogger('documents.xlsx').debug('Suppressed exception', exc_info=True)
             adjusted_width = min(max(max_length + 2, 8), 50)
             ws.column_dimensions[column_letter].width = adjusted_width
 

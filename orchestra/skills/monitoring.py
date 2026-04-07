@@ -677,7 +677,7 @@ def _apply_selector(text: str, selector: str, raw_html: str) -> str:
             if elements:
                 return " ".join(el.get_text(separator=" ", strip=True) for el in elements)
         except ImportError:
-            pass
+                        import logging as _log; _log.getLogger('skills.monitoring').debug('Suppressed exception', exc_info=True)
         except Exception as exc:
             log.debug("BS4 selector failed: %s", exc)
 

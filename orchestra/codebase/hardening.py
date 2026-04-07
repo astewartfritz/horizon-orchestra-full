@@ -1047,7 +1047,7 @@ def _parse_coverage_output(output: str, module_name: str) -> CoverageReport:
                     try:
                         uncovered_lines.extend(range(int(start_str), int(end_str) + 1))
                     except ValueError:
-                        pass
+                                                import logging as _log; _log.getLogger('codebase.hardening').debug('Suppressed exception', exc_info=True)
                 elif part.isdigit():
                     uncovered_lines.append(int(part))
         return CoverageReport(

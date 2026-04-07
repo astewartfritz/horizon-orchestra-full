@@ -55,7 +55,7 @@ class WatchlistManager:
                         alerts=[Alert(**a) for a in wl.get("alerts", [])],
                     )
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('finance.watchlist').debug('Suppressed exception', exc_info=True)
 
     def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,7 +162,7 @@ class WatchlistManager:
                             "change_pct": change_pct,
                         })
                 except Exception:
-                    pass
+                                        import logging as _log; _log.getLogger('finance.watchlist').debug('Suppressed exception', exc_info=True)
         if triggered:
             self._save()
         return triggered

@@ -60,14 +60,14 @@ class GoogleCalendarConnector(Connector):
             try:
                 creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('connectors.gcal').debug('Suppressed exception', exc_info=True)
 
         if not creds and credentials.get("token"):
             try:
                 info = json.loads(credentials["token"])
                 creds = Credentials.from_authorized_user_info(info, SCOPES)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('connectors.gcal').debug('Suppressed exception', exc_info=True)
 
         if creds and creds.expired and creds.refresh_token:
             try:

@@ -458,7 +458,7 @@ class FilesystemIsolation:
             try:
                 os.chmod(path, int(tmpfs.mode, 8))
             except OSError:
-                pass
+                                import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
             tmpfs.mounted = True
 
         self._tmpfs_mounts.append(tmpfs)
@@ -559,7 +559,7 @@ class FilesystemIsolation:
                 try:
                     os.symlink(source, target)
                 except OSError:
-                    pass
+                                        import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
             bm.mounted = True
 
         self._bind_mounts.append(bm)
@@ -636,7 +636,7 @@ class FilesystemIsolation:
                     os.chmod(full_path, 0o000)
                     self._masked_paths.append(full_path)
                 except OSError:
-                    pass
+                                        import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
 
     # ------------------------------------------------------------------
     # Minimal /dev setup
@@ -692,7 +692,7 @@ class FilesystemIsolation:
                     try:
                         os.symlink(host_dev, node_path)
                     except OSError:
-                        pass
+                                                import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
 
         # Create /dev/pts and /dev/shm directories
         os.makedirs(os.path.join(dev_dir, "pts"), exist_ok=True)
@@ -711,7 +711,7 @@ class FilesystemIsolation:
                 try:
                     os.symlink(target, link_path)
                 except OSError:
-                    pass
+                                        import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
 
         log.debug("Minimal /dev setup complete in %s", dev_dir)
 
@@ -1050,7 +1050,7 @@ class FilesystemIsolation:
                 if proc.returncode == 0 and stdout:
                     return int(stdout.decode().split()[0])
             except (FileNotFoundError, ValueError, IndexError):
-                pass
+                                import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
 
         # Fallback: walk the tree
         total = 0
@@ -1064,7 +1064,7 @@ class FilesystemIsolation:
                     try:
                         size += os.path.getsize(fpath)
                     except OSError:
-                        pass
+                                                import logging as _log; _log.getLogger('sandbox.filesystem').debug('Suppressed exception', exc_info=True)
             return size
 
         total = await loop.run_in_executor(None, _walk_size)

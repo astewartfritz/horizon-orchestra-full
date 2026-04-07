@@ -406,7 +406,7 @@ class CgroupManager:
                         os.kill(int(pid_str), signal.SIGKILL)
                         log.debug("Killed PID %s in cgroup %s", pid_str, self._sandbox_id)
                     except ProcessLookupError:
-                        pass
+                                                import logging as _log; _log.getLogger('sandbox.namespaces').debug('Suppressed exception', exc_info=True)
         except OSError:
             pass
 
@@ -708,7 +708,7 @@ class NamespaceManager:
                     state.process.kill()
                     await state.process.wait()
             except ProcessLookupError:
-                pass
+                                import logging as _log; _log.getLogger('sandbox.namespaces').debug('Suppressed exception', exc_info=True)
 
         # Clean up cgroup
         if state.cgroup is not None:

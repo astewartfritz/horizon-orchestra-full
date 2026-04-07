@@ -453,7 +453,7 @@ class HardenedSandbox:
                 try:
                     self._init_process.kill()
                 except ProcessLookupError:
-                    pass
+                                        import logging as _log; _log.getLogger('sandbox.runtime').debug('Suppressed exception', exc_info=True)
             self._init_process = None
 
         self._state = "stopped"
@@ -518,7 +518,7 @@ class HardenedSandbox:
             try:
                 shutil.rmtree(self._workspace_dir, ignore_errors=True)
             except OSError:
-                pass
+                                import logging as _log; _log.getLogger('sandbox.runtime').debug('Suppressed exception', exc_info=True)
 
         self._state = "destroyed"
         self._last_activity = time.time()
@@ -605,7 +605,7 @@ class HardenedSandbox:
                 try:
                     proc.kill()
                 except ProcessLookupError:
-                    pass
+                                        import logging as _log; _log.getLogger('sandbox.runtime').debug('Suppressed exception', exc_info=True)
                 stdout_bytes, stderr_bytes = b"", b"Command timed out"
                 timed_out = True
 
@@ -1350,7 +1350,7 @@ class HardenedSandbox:
             for entry in os.scandir(ws):
                 files.append(entry.name)
         except OSError:
-            pass
+                        import logging as _log; _log.getLogger('sandbox.runtime').debug('Suppressed exception', exc_info=True)
         return files
 
     def _is_path_safe(self, path: str) -> bool:

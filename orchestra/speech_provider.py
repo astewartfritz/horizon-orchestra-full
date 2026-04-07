@@ -1756,7 +1756,7 @@ def _cuda_available() -> bool:
         import torch  # type: ignore[import]
         return torch.cuda.is_available()
     except ImportError:
-        pass
+                import logging as _log; _log.getLogger('speech_provider').debug('Suppressed exception', exc_info=True)
     try:
         import subprocess  # noqa: S603
         result = subprocess.run(

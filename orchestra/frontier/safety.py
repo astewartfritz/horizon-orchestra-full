@@ -703,7 +703,7 @@ class FrontierSafetyGuard:
                     if input_type in ("password", "hidden"):
                         return True
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.safety').debug('Suppressed exception', exc_info=True)
 
         return False
 
@@ -725,7 +725,7 @@ class FrontierSafetyGuard:
             try:
                 return dom.get_text()
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.safety').debug('Suppressed exception', exc_info=True)
         return ""
 
     @staticmethod

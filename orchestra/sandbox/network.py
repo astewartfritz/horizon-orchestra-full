@@ -716,14 +716,14 @@ class NetworkIsolation:
                 "tc", "qdisc", "del", "dev", self._host_iface, "root",
             )
         except OSError:
-            pass
+                        import logging as _log; _log.getLogger('sandbox.network').debug('Suppressed exception', exc_info=True)
 
         try:
             await self._run_cmd(
                 "tc", "qdisc", "del", "dev", self._host_iface, "ingress",
             )
         except OSError:
-            pass
+                        import logging as _log; _log.getLogger('sandbox.network').debug('Suppressed exception', exc_info=True)
 
         log.debug("Removed bandwidth limits on %s", self._host_iface)
 
@@ -763,7 +763,7 @@ class NetworkIsolation:
                     stdout.decode().strip(),
                 )
             except (FileNotFoundError, OSError):
-                pass
+                                import logging as _log; _log.getLogger('sandbox.network').debug('Suppressed exception', exc_info=True)
 
         self._loopback_only = True
         log.info("Loopback-only mode enabled for sandbox %s", self._sandbox_id)

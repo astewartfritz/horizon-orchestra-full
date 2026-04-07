@@ -69,7 +69,7 @@ except Exception as _e:
                     try:
                         return yaml.safe_load(parts[1]) or {}, parts[2].strip()
                     except Exception:
-                        pass
+                                                import logging as _log; _log.getLogger('skills.__init__').debug('Suppressed exception', exc_info=True)
             return {}, content
         def load_from_string(self, content: str, name: str = ""):
             meta, body = self._parse_frontmatter(content)

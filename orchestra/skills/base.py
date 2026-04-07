@@ -143,26 +143,26 @@ class SkillRegistry:
             from .research import DeepResearchSkill
             reg.register(DeepResearchSkill(router=router))
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('skills.base').debug('Suppressed exception', exc_info=True)
         try:
             from .documents import DocumentGenerator
             reg.register(DocumentGenerator())
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('skills.base').debug('Suppressed exception', exc_info=True)
         try:
             from .media import MediaSkill
             reg.register(MediaSkill())
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('skills.base').debug('Suppressed exception', exc_info=True)
         try:
             from .wide_research import WideResearch
             reg.register(WideResearch(router=router))
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('skills.base').debug('Suppressed exception', exc_info=True)
         try:
             from .monitoring import WebMonitor
             reg.register(WebMonitor())
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('skills.base').debug('Suppressed exception', exc_info=True)
 
         return reg

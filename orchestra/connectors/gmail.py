@@ -74,7 +74,7 @@ class GmailConnector(Connector):
             try:
                 creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('connectors.gmail').debug('Suppressed exception', exc_info=True)
 
         # Try token from credentials dict
         if not creds and credentials.get("token"):
@@ -82,7 +82,7 @@ class GmailConnector(Connector):
                 info = json.loads(credentials["token"])
                 creds = Credentials.from_authorized_user_info(info, SCOPES)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('connectors.gmail').debug('Suppressed exception', exc_info=True)
 
         # Refresh if expired
         if creds and creds.expired and creds.refresh_token:

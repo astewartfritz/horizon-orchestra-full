@@ -432,7 +432,7 @@ class AgentKernel:
             if risks:
                 log.info("[KERNEL] Lookahead risks: %s", risks[:2])
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('kernel').debug('Suppressed exception', exc_info=True)
 
     # -- replanning ---------------------------------------------------------
 

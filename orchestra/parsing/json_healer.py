@@ -165,12 +165,12 @@ class JSONHealer:
             raw.decode("utf-8")
             return "utf-8"
         except UnicodeDecodeError:
-            pass
+                        import logging as _log; _log.getLogger('parsing.json_healer').debug('Suppressed exception', exc_info=True)
         try:
             raw.decode("latin-1")
             return "latin-1"
         except UnicodeDecodeError:
-            pass
+                        import logging as _log; _log.getLogger('parsing.json_healer').debug('Suppressed exception', exc_info=True)
         return "utf-8"
 
     def extract_json_from_text(self, text: str) -> list[Any]:
@@ -186,7 +186,7 @@ class JSONHealer:
                         healed, _ = self.heal(candidate)
                         results.append(healed)
                     except Exception:
-                        pass
+                                                import logging as _log; _log.getLogger('parsing.json_healer').debug('Suppressed exception', exc_info=True)
                     i = end
                     continue
             i += 1

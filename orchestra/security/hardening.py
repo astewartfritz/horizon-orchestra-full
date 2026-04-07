@@ -331,7 +331,7 @@ class AdversarialFilter:
                     })
                     break
             except ValueError:
-                pass
+                                import logging as _log; _log.getLogger('security.hardening').debug('Suppressed exception', exc_info=True)
 
         return findings
 

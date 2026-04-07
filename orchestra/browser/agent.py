@@ -285,7 +285,7 @@ class BrowserAgent:
                         """,
                     )
                 except ValueError:
-                    pass
+                                        import logging as _log; _log.getLogger('browser.agent').debug('Suppressed exception', exc_info=True)
             return await engine.execute_on_page(handle.id, "click", selector=selector)
 
         elif act_type == "fill":

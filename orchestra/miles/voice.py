@@ -293,7 +293,7 @@ class SpeechToText:
             try:
                 _os.unlink(tmp_audio_path)
             except OSError:
-                pass
+                                import logging as _log; _log.getLogger('miles.voice').debug('Suppressed exception', exc_info=True)
 
 
 # ---------------------------------------------------------------------------

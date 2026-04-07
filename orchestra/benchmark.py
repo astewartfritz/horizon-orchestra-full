@@ -326,7 +326,7 @@ class BenchmarkSuite:
             async for event in parser.parse(_stream()):
                 events_seen += 1
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('benchmark').debug('Suppressed exception', exc_info=True)
         elapsed = time.monotonic() - t0
 
         mb_processed = len(payload) / (1024 * 1024)
@@ -442,7 +442,7 @@ class BenchmarkSuite:
                 if result.blocked:
                     blocked += 1
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('benchmark').debug('Suppressed exception', exc_info=True)
 
         rate = blocked / max(len(samples), 1)
         baseline = PERPLEXITY_BASELINE["red_team_block_rate"]

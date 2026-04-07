@@ -707,7 +707,7 @@ class FrontierTaskRunner:
                             task.completed_at = time.time()
                             break
                     except Exception:
-                        pass
+                                                import logging as _log; _log.getLogger('frontier.task_runner').debug('Suppressed exception', exc_info=True)
 
                 # If planner returned None but evaluation says not complete,
                 # treat as completion anyway (agent has no more actions)
@@ -788,7 +788,7 @@ class FrontierTaskRunner:
                                 "format": ss_data.get("format", "png"),
                             })
                     except Exception:
-                        pass
+                                                import logging as _log; _log.getLogger('frontier.task_runner').debug('Suppressed exception', exc_info=True)
 
                 # Handle extraction results
                 if command.command_type == "extract" and getattr(result, "success", False):
@@ -819,7 +819,7 @@ class FrontierTaskRunner:
                         task.completed_at = time.time()
                         break
                 except Exception:
-                    pass
+                                        import logging as _log; _log.getLogger('frontier.task_runner').debug('Suppressed exception', exc_info=True)
 
             # Progress event
             self._emit_event(task.task_id, EVENT_PROGRESS, CHANNEL_SSE, {
@@ -1013,7 +1013,7 @@ class FrontierTaskRunner:
             try:
                 await sandbox.close()
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.task_runner').debug('Suppressed exception', exc_info=True)
 
     # -----------------------------------------------------------------
     # Internal — agent bridge / planner creation
@@ -1142,7 +1142,7 @@ class FrontierTaskRunner:
             try:
                 return bridge._current_url()
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.task_runner').debug('Suppressed exception', exc_info=True)
         return ""
 
     @staticmethod

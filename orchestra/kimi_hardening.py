@@ -685,18 +685,18 @@ def _extract_content(resp: Any) -> str:
         try:
             return resp["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError):
-            pass
+                        import logging as _log; _log.getLogger('kimi_hardening').debug('Suppressed exception', exc_info=True)
         return resp.get("content", "") or resp.get("text", "") or ""
     # Object with .choices
     try:
         return resp.choices[0].message.content or ""
     except (AttributeError, IndexError, TypeError):
-        pass
+                import logging as _log; _log.getLogger('kimi_hardening').debug('Suppressed exception', exc_info=True)
     # Object with .content
     try:
         return resp.content or ""
     except AttributeError:
-        pass
+                import logging as _log; _log.getLogger('kimi_hardening').debug('Suppressed exception', exc_info=True)
     return str(resp)
 
 

@@ -450,7 +450,7 @@ class ChaosOrchestrator:
                     if healthy:
                         break
                 except Exception:
-                    pass
+                                        import logging as _log; _log.getLogger('red_team.chaos_orchestrator').debug('Suppressed exception', exc_info=True)
                 await asyncio.sleep(0.01)
             else:
                 recovered = False

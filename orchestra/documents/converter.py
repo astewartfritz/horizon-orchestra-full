@@ -128,7 +128,7 @@ class DocumentConverter:
                 log.debug("Pandoc found: %s", version)
                 return True
         except FileNotFoundError:
-            pass
+                        import logging as _log; _log.getLogger('documents.converter').debug('Suppressed exception', exc_info=True)
         return False
 
     # ------------------------------------------------------------------
@@ -382,7 +382,7 @@ class DocumentConverter:
                 result = Path(tmp_out).read_bytes()
                 return result
             except ConversionError:
-                pass
+                                import logging as _log; _log.getLogger('documents.converter').debug('Suppressed exception', exc_info=True)
             finally:
                 Path(tmp_in).unlink(missing_ok=True)
 
@@ -419,7 +419,7 @@ class DocumentConverter:
                 result = Path(tmp_out).read_bytes()
                 return result
             except ConversionError:
-                pass
+                                import logging as _log; _log.getLogger('documents.converter').debug('Suppressed exception', exc_info=True)
             finally:
                 Path(tmp_in).unlink(missing_ok=True)
 
@@ -471,7 +471,7 @@ class DocumentConverter:
                 result = Path(tmp_out).read_bytes()
                 return result
             except ConversionError:
-                pass
+                                import logging as _log; _log.getLogger('documents.converter').debug('Suppressed exception', exc_info=True)
             finally:
                 Path(tmp_in).unlink(missing_ok=True)
 

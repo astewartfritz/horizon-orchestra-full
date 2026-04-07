@@ -643,7 +643,7 @@ class TDDLoop:
                 rel = py_file.relative_to(self._work_dir)
                 parts.append(f"### {rel} ###\n{content}")
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('codebase.tdd_loop').debug('Suppressed exception', exc_info=True)
 
         return "\n\n".join(parts)
 

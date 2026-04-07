@@ -300,7 +300,7 @@ class _ParserState:
                 ))
                 self.event_count += 1
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('parsing.streaming_parser').debug('Suppressed exception', exc_info=True)
             self._json_depth = 0
             self._json_buffer = ""
 

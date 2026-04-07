@@ -794,7 +794,7 @@ def _extract_content(resp: Any) -> str:
     try:
         return resp.choices[0].message.content or ""
     except (AttributeError, IndexError, TypeError):
-        pass
+                import logging as _log; _log.getLogger('miles.routines').debug('Suppressed exception', exc_info=True)
     try:
         return resp.content or ""
     except AttributeError:

@@ -724,7 +724,7 @@ class AgentBridge:
                 try:
                     return self._sandbox.get_page(page_id)
                 except Exception:
-                    pass
+                                        import logging as _log; _log.getLogger('frontier.agent_bridge').debug('Suppressed exception', exc_info=True)
         # Return the current/active page
         for attr in ("current_page", "active_page", "page"):
             val = getattr(self._sandbox, attr, None)
@@ -739,7 +739,7 @@ class AgentBridge:
             try:
                 return page.url
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.agent_bridge').debug('Suppressed exception', exc_info=True)
         if self._sandbox is not None and hasattr(self._sandbox, "current_url"):
             return self._sandbox.current_url
         return ""
@@ -1122,7 +1122,7 @@ class LLMActionPlanner:
             try:
                 return dom.to_markdown_table()
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.agent_bridge').debug('Suppressed exception', exc_info=True)
 
         # Fallback: build from interactable elements
         if hasattr(dom, "interactable_elements"):
@@ -1140,7 +1140,7 @@ class LLMActionPlanner:
                     lines.append(f"| {eid} | {tag} | {text} | {etype} | {href} |")
                 return "\n".join(lines)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.agent_bridge').debug('Suppressed exception', exc_info=True)
 
         # Last fallback
         if hasattr(dom, "text_content"):
@@ -1193,5 +1193,5 @@ class LLMActionPlanner:
             try:
                 return dom.get_text()
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('frontier.agent_bridge').debug('Suppressed exception', exc_info=True)
         return ""

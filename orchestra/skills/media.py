@@ -509,7 +509,7 @@ class Transcriber(Skill):
                 try:
                     Path(local_path).unlink(missing_ok=True)
                 except OSError:
-                    pass
+                                        import logging as _log; _log.getLogger('skills.media').debug('Suppressed exception', exc_info=True)
 
     async def summarize_transcript(
         self,

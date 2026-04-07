@@ -76,7 +76,7 @@ class Workspace:
             try:
                 return json.loads(self._meta_file.read_text())
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('workspace').debug('Suppressed exception', exc_info=True)
         return {"artifacts": {}, "created_at": time.time()}
 
     def _save_meta(self) -> None:

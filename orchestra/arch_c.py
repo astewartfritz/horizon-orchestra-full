@@ -384,7 +384,7 @@ class SwarmAgent:
                     router=self.router,
                 )
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('arch_c').debug('Suppressed exception', exc_info=True)
 
         log.info(
             "[C] Swarm complete: %d agents spawned, %d tool calls, %.1fs",
@@ -720,7 +720,7 @@ class SwarmAgent:
         try:
             output_path.write_text(output, encoding="utf-8")
         except OSError:
-            pass
+                        import logging as _log; _log.getLogger('arch_c').debug('Suppressed exception', exc_info=True)
 
         result = {
             "agent_id": agent_id,

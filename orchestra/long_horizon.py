@@ -464,7 +464,7 @@ class LongHorizonRunner:
                 try:
                     self._progress_callback(tracker.to_dict())
                 except Exception:
-                    pass
+                                        import logging as _log; _log.getLogger('long_horizon').debug('Suppressed exception', exc_info=True)
 
             # Check pause conditions before executing step
             if self._should_pause(elapsed_minutes, tracker._total_tool_calls):

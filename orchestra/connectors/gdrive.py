@@ -53,12 +53,12 @@ class GoogleDriveConnector(Connector):
             try:
                 creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('connectors.gdrive').debug('Suppressed exception', exc_info=True)
         if not creds and credentials.get("token"):
             try:
                 creds = Credentials.from_authorized_user_info(json.loads(credentials["token"]), SCOPES)
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('connectors.gdrive').debug('Suppressed exception', exc_info=True)
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())

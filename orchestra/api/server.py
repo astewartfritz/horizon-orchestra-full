@@ -297,6 +297,71 @@ def create_production_app(config: APIConfig | None = None) -> Any:
         openapi_url=f"/{config.api_version}/openapi.json" if config.enable_docs else None,
     )
 
+    # ── Rate limiting middleware ──────────────────────────────────────
+    import time as _time
+    import collections
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import Response as StarletteResponse
+
+    _rate_windows: dict = {}
+    _RATE_LIMIT = int(os.environ.get("ORCHESTRA_RATE_LIMIT", "100"))   # req/min per IP
+    _RATE_WINDOW = 60  # seconds
+
+    class RateLimitMiddleware(BaseHTTPMiddleware):
+        """Sliding-window rate limiter per IP. Returns 429 on excess."""
+        async def dispatch(self, request: Request, call_next: Any) -> Any:
+            ip = request.client.host if request.client else "unknown"
+            now = _time.monotonic()
+            window = _rate_windows.setdefault(ip, collections.deque())
+            # Remove entries outside the window
+            while window and now - window[0] > _RATE_WINDOW:
+                window.popleft()
+            if len(window) >= _RATE_LIMIT:
+                return StarletteResponse(
+                    content='{"error":{"code":"RATE_LIMIT_EXCEEDED","message":"Too many requests"},"data":null,"meta":{}}',
+                    status_code=429,
+                    media_type="application/json",
+                    headers={"Retry-After": str(_RATE_WINDOW)},
+                )
+            window.append(now)
+            return await call_next(request)
+
+    app.add_middleware(RateLimitMiddleware)
+
+    # ── Request ID + timing middleware ────────────────────────────────
+    class RequestMetaMiddleware(BaseHTTPMiddleware):
+        """Attaches X-Request-ID and X-Response-Time to every response."""
+        async def dispatch(self, request: Request, call_next: Any) -> Any:
+            req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
+            request.state.request_id = req_id
+            t0 = _time.monotonic()
+            response = await call_next(request)
+            elapsed = round((_time.monotonic() - t0) * 1000, 1)
+            response.headers["X-Request-ID"] = req_id
+            response.headers["X-Response-Time"] = f"{elapsed}ms"
+            response.headers["X-Powered-By"] = "Horizon Orchestra"
+            return response
+
+    app.add_middleware(RequestMetaMiddleware)
+
+    # ── Security headers middleware ───────────────────────────────────
+    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+        """Adds hardened HTTP security headers to every response."""
+        async def dispatch(self, request: Request, call_next: Any) -> Any:
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"
+            )
+            return response
+
+    app.add_middleware(SecurityHeadersMiddleware)
+
     # CORS
     app.add_middleware(
         CORSMiddleware,
@@ -667,7 +732,7 @@ def create_production_app(config: APIConfig | None = None) -> Any:
             try:
                 await websocket.send_json({"error": str(exc), "done": True})
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('api.server').debug('Suppressed exception', exc_info=True)
 
     @app.post(f"/{config.api_version}/query")
     async def query_model(
@@ -932,7 +997,7 @@ def create_production_app(config: APIConfig | None = None) -> Any:
             results = await store.search(user_id, body.query, limit=body.limit)
             return _ok(results, req_id, started)
         except ImportError:
-            pass
+                        import logging as _log; _log.getLogger('api.server').debug('Suppressed exception', exc_info=True)
 
         # Fallback: simple substring search over in-memory list
         user_memories = _MEMORIES.get(user_id, [])

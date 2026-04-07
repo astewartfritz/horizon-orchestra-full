@@ -382,7 +382,7 @@ class DeepResearchSkill(Skill):
                 try:
                     confidence = float(low.replace("confidence:", "").strip())
                 except ValueError:
-                    pass
+                                        import logging as _log; _log.getLogger('skills.research').debug('Suppressed exception', exc_info=True)
             elif line.strip().startswith("-"):
                 point = line.strip().lstrip("- ").strip()
                 if section == "for":

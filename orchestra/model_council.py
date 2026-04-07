@@ -945,7 +945,7 @@ def register_council_tools(
         log.info("Registered council_deliberate tool (named interface)")
         return
     except TypeError:
-        pass
+                import logging as _log; _log.getLogger('model_council').debug('Suppressed exception', exc_info=True)
 
     try:
         tool_registry.register(council_deliberate)

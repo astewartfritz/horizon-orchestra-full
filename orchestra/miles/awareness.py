@@ -362,7 +362,7 @@ Example: ["Review the agenda for your 2 PM meeting", "Follow up on John's email"
             if results:
                 return str(results[0].get("snippet", ""))[:200]
         except ImportError:
-            pass
+                        import logging as _log; _log.getLogger('miles.awareness').debug('Suppressed exception', exc_info=True)
         except Exception as exc:  # noqa: BLE001
             logger.debug("Weather fetch via search failed: %s", exc)
         return ""
@@ -418,7 +418,7 @@ def _extract_content(resp: Any) -> str:
     try:
         return resp.choices[0].message.content or ""
     except (AttributeError, IndexError, TypeError):
-        pass
+                import logging as _log; _log.getLogger('miles.awareness').debug('Suppressed exception', exc_info=True)
     try:
         return resp.content or ""
     except AttributeError:

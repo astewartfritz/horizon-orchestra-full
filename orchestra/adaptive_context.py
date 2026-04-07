@@ -94,7 +94,7 @@ class TokenCounter:
             try:
                 return len(self._enc.encode(text))
             except Exception:
-                pass
+                                import logging as _log; _log.getLogger('adaptive_context').debug('Suppressed exception', exc_info=True)
         # Fallback: approximate 4 chars per token
         return max(1, len(text) // 4)
 

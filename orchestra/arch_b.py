@@ -1393,7 +1393,7 @@ class RAGPipeline:
             if memory_block:
                 fused_context = f"Prior knowledge:\n{memory_block}\n\n{fused_context}"
         except Exception:
-            pass
+                        import logging as _log; _log.getLogger('arch_b').debug('Suppressed exception', exc_info=True)
 
         if context:
             ctx_str = json.dumps(context, default=str, indent=2)
