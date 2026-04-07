@@ -65,6 +65,9 @@ from .arch_c import SwarmAgent, SwarmConfig
 from .arch_d import MCPToolHub, MCPHubConfig
 from .perplexity import PerplexitySearch, PerplexityAgent
 from .connectors.base import Connector, ConnectorRegistry
+from .connectors.jira import JiraConnector
+from .connectors.linear import LinearConnector
+from .connectors.notion import NotionConnector
 from .tools.browser import register_browser_tools
 from .vllm import LocalInference, LocalConfig
 
@@ -540,6 +543,31 @@ services:
       timeout: 10s
       retries: 3
 
+  # ── Gemma 4 Self-Hosted Inference ─────────────────────────────────────
+  gemma4-vllm:
+    image: vllm/vllm-openai:nightly
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+    command: >
+      --model google/gemma-4-31B-it
+      --tensor-parallel-size 4
+      --trust-remote-code
+      --host 0.0.0.0
+      --port 8001
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # ── API Gateway ─────────────────────────────────────────────────────────
   api:
     build:
@@ -549,10 +577,13 @@ services:
       - "3000:3000"
     environment:
       - KIMI_BASE_URL=http://kimi-vllm:8000/v1
+      - GEMMA4_BASE_URL=http://gemma4-vllm:8001/v1
       - MOONSHOT_API_KEY=${{MOONSHOT_API_KEY:-}}
       - PERPLEXITY_API_KEY=${{PERPLEXITY_API_KEY:-}}
       - OPENROUTER_API_KEY=${{OPENROUTER_API_KEY:-}}
       - OPENAI_API_KEY=${{OPENAI_API_KEY:-}}
+      - GEMINI_API_KEY=${{GEMINI_API_KEY:-}}
+      - GOOGLE_API_KEY=${{GOOGLE_API_KEY:-}}
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:horizon@postgres:5432/orchestra
       - HORIZON_API_KEY=${{HORIZON_API_KEY:-}}
@@ -651,6 +682,10 @@ MOONSHOT_API_KEY=
 PERPLEXITY_API_KEY=
 OPENROUTER_API_KEY=
 OPENAI_API_KEY=
+
+# Gemma 4 / Google AI Studio
+GEMINI_API_KEY=
+GOOGLE_API_KEY=
 
 # Optional: API authentication for the Horizon Orchestra server
 HORIZON_API_KEY=

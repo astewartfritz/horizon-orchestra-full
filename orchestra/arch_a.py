@@ -133,6 +133,45 @@ class MonolithicConfig:
 
 
 # ---------------------------------------------------------------------------
+# Helper functions used by arch_a and tests
+# ---------------------------------------------------------------------------
+
+def _thinking_block(model_id: str = "", router: object = None) -> str:
+    """Return a thinking-mode preamble if the model supports it.
+
+    Uses the router to check ``supports_thinking`` on the model's
+    ``ModelConfig``.  If the model does not support thinking (or no
+    router is provided), returns an empty string so no extra tokens
+    are generated.
+    """
+    if not model_id or router is None:
+        return ""
+    try:
+        cfg = router.get_config(model_id)  # type: ignore[union-attr]
+        if not cfg.supports_thinking:
+            return ""
+    except (KeyError, AttributeError):
+        return ""
+    return "<thinking>Let me reason through this step by step.</thinking>"
+
+
+def _model_display_name(model_id: str) -> str:
+    """Return a human-readable display name for a model ID."""
+    _names = {
+        "kimi-k2.5": "Kimi K2.5",
+        "gemma-4-31b": "Gemma 4 31B Dense",
+        "gemma-4-26b-moe": "Gemma 4 26B MoE",
+        "gemma-4-12b": "Gemma 4 12B Dense",
+        "gemma-4-e4b": "Gemma 4 E4B Efficient",
+        "gemma-4-e2b": "Gemma 4 E2B Efficient",
+        "sonar-pro": "Sonar Pro",
+        "gpt-5.4": "GPT-5.4",
+        "claude-opus-4.6": "Claude Opus 4.6",
+    }
+    return _names.get(model_id, model_id)
+
+
+# ---------------------------------------------------------------------------
 # System prompt builder
 # ---------------------------------------------------------------------------
 

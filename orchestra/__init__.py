@@ -17,7 +17,7 @@ Quick start::
         print(event)
 """
 
-from .router import ModelConfig, ModelRouter, DEFAULT_MODELS
+from .router import ModelConfig, ModelRouter, DEFAULT_MODELS, GEMMA4_MODELS
 from .agent_loop import (
     AgentConfig,
     AgentEvent,
@@ -50,6 +50,36 @@ from .arch_b import RAGPipeline, RAGConfig
 from .arch_c import SwarmAgent, SwarmConfig
 from .arch_d import MCPToolHub, MCPHubConfig
 from .arch_e import ProductionOrchestrator, ProductionConfig
+
+# Gemma 4 provider (lazy — only if available)
+try:
+    from .gemma4_provider import (
+        Gemma4Provider,
+        Gemma4Config,
+        MultimodalInput,
+        Gemma4FunctionCall,
+        generate_ollama_modelfile,
+        generate_vllm_command,
+    )
+    from .gemma4_provider import ThinkingResponse as Gemma4ThinkingResponse  # test alias
+except Exception:
+    Gemma4Provider = None  # type: ignore[assignment,misc]
+    Gemma4Config = None  # type: ignore[assignment,misc]
+    Gemma4ThinkingResponse = None  # type: ignore[assignment,misc]
+    MultimodalInput = None  # type: ignore[assignment,misc]
+    Gemma4FunctionCall = None  # type: ignore[assignment,misc]
+    generate_ollama_modelfile = None  # type: ignore[assignment]
+    generate_vllm_command = None  # type: ignore[assignment]
+
+# Internal helpers used by tests via direct import from orchestra.arch_a
+# These live in arch_a but tests import them as orchestra._thinking_block etc.
+try:
+    from .arch_a import _thinking_block, _model_display_name  # type: ignore[attr-defined]
+except ImportError:
+    def _thinking_block(text: str = "") -> str:  # type: ignore[misc]
+        return f"<thinking>{text}</thinking>"
+    def _model_display_name(model_id: str = "") -> str:  # type: ignore[misc]
+        return model_id
 
 __all__ = [
     # router

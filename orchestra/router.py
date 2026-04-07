@@ -18,6 +18,7 @@ __all__ = [
     "ModelConfig",
     "ModelRouter",
     "DEFAULT_MODELS",
+    "GEMMA4_MODELS",
 ]
 
 log = logging.getLogger("orchestra.router")
@@ -41,6 +42,11 @@ class ModelConfig:
     max_context: int = 128_000
     supports_tools: bool = True
     supports_vision: bool = False
+    supports_audio: bool = False    # Audio input (speech, ASR) — Gemma 4 E2B/E4B
+    supports_thinking: bool = False  # Native reasoning/thinking mode
+    architecture: str = ""          # Model architecture: "dense" | "moe" | "efficient" | ""
+    parameters_b: float = 0.0       # Parameter count in billions (e.g., 31.0 for Gemma 4 31B)
+    on_device: bool = False          # Whether this model can run on-device
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +160,115 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         supports_tools=True, supports_vision=False,
     ),
 
+    # ── Google Gemma 4 family ─────────────────────────────────────────────
+    # Dense models (Gemini API / vLLM / Ollama)
+    "gemma-4-31b": ModelConfig(
+        model_id="gemma-4-31b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key_env="GOOGLE_API_KEY",
+        strengths=("reasoning", "coding", "vision", "tool_use", "thinking"),
+        cost_input=0.10, cost_output=0.30,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=30.7,
+    ),
+    "gemma-4-26b-moe": ModelConfig(
+        model_id="gemma-4-26b-moe-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key_env="GOOGLE_API_KEY",
+        strengths=("reasoning", "coding", "vision", "tool_use", "thinking", "speed"),
+        cost_input=0.08, cost_output=0.25,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="moe", parameters_b=25.2,
+    ),
+    "gemma-4-12b": ModelConfig(
+        model_id="gemma-4-12b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key_env="GOOGLE_API_KEY",
+        strengths=("reasoning", "coding", "vision", "tool_use"),
+        cost_input=0.05, cost_output=0.15,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=False,
+        architecture="dense", parameters_b=12.0,
+    ),
+    # Efficient models with audio input
+    "gemma-4-e4b": ModelConfig(
+        model_id="gemma-4-e4b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key_env="GOOGLE_API_KEY",
+        strengths=("speed", "vision", "audio", "lightweight", "on_device"),
+        cost_input=0.02, cost_output=0.06,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=True, supports_thinking=True,
+        architecture="efficient", parameters_b=4.0, on_device=True,
+    ),
+    "gemma-4-e2b": ModelConfig(
+        model_id="gemma-4-e2b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key_env="GOOGLE_API_KEY",
+        strengths=("speed", "vision", "audio", "lightweight", "on_device"),
+        cost_input=0.01, cost_output=0.03,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=True, supports_thinking=False,  # E2B: audio but no thinking
+        architecture="efficient", parameters_b=2.0, on_device=True,
+    ),
+    # Local deployments
+    "gemma-4-31b-vllm": ModelConfig(
+        model_id="gemma-4-31b-it",
+        provider="local",
+        base_url="http://localhost:8000/v1",
+        api_key_env="",
+        strengths=("reasoning", "coding", "vision", "tool_use"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+    ),
+    "gemma-4-e4b-vllm": ModelConfig(
+        model_id="gemma-4-e4b-it",
+        provider="local",
+        base_url="http://localhost:8000/v1",
+        api_key_env="",
+        strengths=("speed", "audio", "vision", "lightweight"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=True, supports_thinking=True,
+    ),
+    "gemma-4-ollama": ModelConfig(
+        model_id="gemma4:12b",
+        provider="ollama",
+        base_url="http://localhost:11434/v1",
+        api_key_env="",
+        strengths=("speed", "lightweight", "vision"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=False,
+    ),
+    "gemma-4-hf": ModelConfig(
+        model_id="google/gemma-4-12b-it",
+        provider="huggingface",
+        base_url="http://localhost:8080/v1",
+        api_key_env="HF_TOKEN",
+        strengths=("reasoning", "vision", "tool_use"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=False,
+    ),
+
     # ── Local / Ollama ────────────────────────────────────────────────────
     "ollama-local": ModelConfig(
         model_id="llama3",
@@ -166,6 +281,11 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         supports_tools=False, supports_vision=False,
     ),
 }
+
+# Convenience set of all Gemma 4 model keys
+GEMMA4_MODELS: frozenset[str] = frozenset(
+    k for k in DEFAULT_MODELS if k.startswith("gemma-4")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +398,31 @@ class ModelRouter:
         avail.sort(key=lambda x: x[1].cost_input + x[1].cost_output)
         return avail[0][0]
 
+    # -- model helpers ------------------------------------------------------
+
+    def get_config(self, model_name: str) -> ModelConfig:
+        """Return the :class:`ModelConfig` for *model_name*.
+
+        Raises ``KeyError`` if the model is not registered.
+        """
+        cfg = self.models.get(model_name)
+        if cfg is None:
+            raise KeyError(f"Unknown model: {model_name!r}")
+        return cfg
+
+    def is_gemma4(self, model_name: str) -> bool:
+        """Return True if *model_name* is a Gemma 4 variant."""
+        return model_name in GEMMA4_MODELS or model_name.startswith("gemma-4")
+
+    def list_gemma4_models(self) -> list[str]:
+        """Return all registered Gemma 4 model keys."""
+        return [k for k in self.models if self.is_gemma4(k)]
+
+    def register(self, name: str, config: ModelConfig) -> None:
+        """Register a new model (or override an existing one)."""
+        self.models[name] = config
+        log.debug("Registered model: %s (%s)", name, config.provider)
+
     # -- enumeration --------------------------------------------------------
 
     def list_models(self) -> list[dict[str, Any]]:
@@ -297,6 +442,11 @@ class ModelRouter:
                 "max_context": cfg.max_context,
                 "supports_tools": cfg.supports_tools,
                 "supports_vision": cfg.supports_vision,
+                "supports_audio": cfg.supports_audio,
+                "supports_thinking": cfg.supports_thinking,
+                "architecture": cfg.architecture,
+                "parameters_b": cfg.parameters_b,
+                "on_device": cfg.on_device,
                 "available": has_key,
             })
         return out
