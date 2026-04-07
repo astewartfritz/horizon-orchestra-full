@@ -22,6 +22,31 @@ import httpx
 
 from .router import ModelRouter
 
+# ── Parsing integration (lazy — no hard dependency) ──────────────────────────
+try:
+    from .parsing.json_healer import JSONHealer as _JSONHealer
+    from .parsing.tool_call_fixer import ToolCallFixer as _ToolCallFixer
+    from .parsing.hallucination_scrubber import HallucinationScrubber as _HallucinScrubber
+    _PARSING_AVAILABLE = True
+    _json_healer = _JSONHealer()
+    _tool_fixer   = _ToolCallFixer()
+    _hall_scrub   = _HallucinScrubber()
+except Exception:
+    _PARSING_AVAILABLE = False
+    _json_healer = _tool_fixer = _hall_scrub = None  # type: ignore
+
+# ── Resilience integration (lazy) ────────────────────────────────────────────
+try:
+    from .resilience.circuit_breaker import CircuitBreaker as _CircuitBreaker
+    from .resilience.adaptive_retry import AdaptiveRetryManager as _AdaptiveRetry
+    from .resilience.error_taxonomy import ERROR_REGISTRY as _ERR_REG
+    _RESILIENCE_AVAILABLE = True
+    _circuit_breaker = _CircuitBreaker()
+    _retry_mgr       = _AdaptiveRetry()
+except Exception:
+    _RESILIENCE_AVAILABLE = False
+    _circuit_breaker = _retry_mgr = None  # type: ignore
+
 __all__ = [
     "AgentConfig",
     "AgentEvent",
@@ -243,6 +268,24 @@ class AgentLoop:
         total_tool_calls = 0
 
         for iteration in range(1, self.config.max_iterations + 1):
+            # ── Resilience: check circuit breaker before API call ──────────────
+            provider = getattr(self.router.models.get(self.config.model), "provider", "unknown")
+            if _RESILIENCE_AVAILABLE and _circuit_breaker is not None:
+                _cb_result = _circuit_breaker.check(provider, self.config.model, "chat")
+                import inspect as _inspect
+                if _inspect.iscoroutine(_cb_result):
+                    cb_allowed, cb_reason = await _cb_result
+                else:
+                    cb_allowed, cb_reason = _cb_result
+                if not cb_allowed:
+                    yield ErrorEvent(
+                        message=f"Circuit breaker OPEN for {provider}/{self.config.model}: {cb_reason}",
+                        iteration=iteration,
+                        recoverable=True,
+                    )
+                    return
+
+            _t0 = time.monotonic()
             try:
                 response = await client.chat.completions.create(
                     model=model_id,
@@ -252,7 +295,25 @@ class AgentLoop:
                     max_tokens=self.config.max_tokens,
                     temperature=self.config.temperature,
                 )
+                # ── Record success in circuit breaker ──
+                if _RESILIENCE_AVAILABLE and _circuit_breaker is not None:
+                    _circuit_breaker.record_success(
+                        provider, self.config.model,
+                        int((time.monotonic() - _t0) * 1000)
+                    )
             except Exception as exc:
+                _latency_ms = int((time.monotonic() - _t0) * 1000)
+                # ── Record failure + classify error ──
+                if _RESILIENCE_AVAILABLE and _circuit_breaker is not None:
+                    _error_type = str(type(exc).__name__)
+                    _circuit_breaker.record_failure(provider, self.config.model, _error_type, _latency_ms)
+                # ── Check if we should retry via adaptive retry manager ──
+                if _RESILIENCE_AVAILABLE and _retry_mgr is not None:
+                    _should, _delay = _retry_mgr.should_retry(iteration, exc, _latency_ms)
+                    if _should and iteration < self.config.max_iterations:
+                        log.debug("Adaptive retry in %.0fms (attempt %d)", _delay, iteration)
+                        await asyncio.sleep(_delay / 1000.0)
+                        continue  # retry the same iteration
                 yield ErrorEvent(
                     message=f"API call failed: {exc}",
                     iteration=iteration,
@@ -284,6 +345,17 @@ class AgentLoop:
             # ── No tool calls → we're done ────────────────────────────────
             if not assistant_msg.tool_calls:
                 content = assistant_msg.content or ""
+                # ── Hallucination scrub on final answer ──────────────────
+                if _PARSING_AVAILABLE and _hall_scrub is not None and content:
+                    try:
+                        content, _h_report = _hall_scrub.scrub(content)
+                        if _h_report.severity > 0.5:
+                            log.warning(
+                                "High hallucination score (%.2f) on final answer",
+                                _h_report.severity,
+                            )
+                    except Exception:
+                        pass  # never let scrubbing block the answer
                 yield FinalAnswerEvent(
                     content=content,
                     total_iterations=iteration,
@@ -296,7 +368,19 @@ class AgentLoop:
                 try:
                     args = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
-                    args = {}
+                    # ── JSON healer: repair malformed tool arguments ──────
+                    if _PARSING_AVAILABLE and _json_healer is not None:
+                        try:
+                            args, _repairs = _json_healer.heal(tc.function.arguments)
+                            if _repairs:
+                                log.debug(
+                                    "JSONHealer applied %d repairs to tool args",
+                                    len(_repairs),
+                                )
+                        except Exception:
+                            args = {}
+                    else:
+                        args = {}
 
                 yield ToolCallEvent(
                     iteration=iteration,

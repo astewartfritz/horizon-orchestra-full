@@ -18,6 +18,19 @@ from .hardening import (
     SecurityResult,
 )
 
+# Wire in world-class red team suite (lazy — no hard dependency)
+try:
+    from ..red_team import (
+        RedTeamRunner as AdvancedRedTeamRunner,
+        MutationEngine,
+        ChaosOrchestrator,
+        HardeningAdvisor,
+    )
+    from ..red_team.attack_vectors import ATTACK_PAYLOADS
+    _RED_TEAM_AVAILABLE = True
+except Exception:
+    _RED_TEAM_AVAILABLE = False
+
 # Import from orchestra.security_ext — a thin re-export module that loads
 # the root-level orchestra/security.py using the proper package context.
 # We register it in sys.modules under a unique name to avoid collisions.
