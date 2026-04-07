@@ -1,1 +1,2 @@
-# Horizon Orchestra currently uses the Python standard library only.
+openai>=1.60.0
+httpx>=0.27.0

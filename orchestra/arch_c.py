@@ -1,0 +1,535 @@
+"""Architecture C — Native Kimi K2.5 Agent Swarm.
+
+The model itself decides when to spawn sub-agents, what they specialise
+in, and when to merge results.  This leverages K2.5's built-in swarm
+coordination (up to 100 parallel agents) with memory-aware context
+injection at every level.
+
+The coordinator has three swarm-specific tools on top of the standard
+tool surface:
+
+* ``spawn_agent``  — create a sub-agent with a specific task and model
+* ``collect_results`` — gather outputs from spawned agents
+* ``delegate`` — synchronous one-shot delegation to a specialist model
+
+Memory is shared across all agents via the same MemoryStore, so
+sub-agents can search for and store user context.
+
+Usage::
+
+    from orchestra.arch_c import SwarmAgent
+    agent = SwarmAgent(user_id="ashton")
+    result = await agent.run("Research Kimi K2.5 benchmarks and build a comparison dashboard")
+    print(result)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, AsyncGenerator
+
+from .router import ModelRouter
+from .agent_loop import (
+    AgentLoop,
+    AgentConfig,
+    AgentEvent,
+    FinalAnswerEvent,
+    ErrorEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+    ToolSpec,
+    ToolRegistry,
+    create_default_tools,
+)
+from .memory import (
+    MemoryStore,
+    MemoryManager,
+    SessionContext,
+    register_memory_tools,
+)
+
+__all__ = ["SwarmAgent", "SwarmConfig"]
+
+log = logging.getLogger("orchestra.arch_c")
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SwarmConfig:
+    """Tuning knobs for Architecture C."""
+    coordinator_model: str = "kimi-k2.5"
+    default_agent_model: str = "kimi-k2.5"
+    max_coordinator_iterations: int = 300
+    max_agent_iterations: int = 100
+    max_parallel_agents: int = 100
+    max_tokens: int = 16384
+    temperature: float = 0.6
+    user_id: str = "default"
+    workspace_dir: str = "/tmp/horizon_workspace"
+    memory_db: str = ""
+    auto_extract_memory: bool = True
+    memory_context_limit: int = 15
+    verbose: bool = False
+
+
+# ---------------------------------------------------------------------------
+# System prompt
+# ---------------------------------------------------------------------------
+
+SWARM_SYSTEM = """\
+You are Horizon Orchestra operating in Agent Swarm mode (Architecture C),
+powered by Kimi K2.5.
+
+You are an autonomous coordinator that can:
+1. Analyse complex tasks and decompose them into parallel subtasks.
+2. Spawn specialised sub-agents to handle each subtask.
+3. Delegate one-off questions to specialist models.
+4. Collect and merge results from sub-agents.
+5. Search and store persistent user memory.
+
+Swarm tools:
+- spawn_agent: Create a sub-agent (runs in parallel).
+- collect_results: Gather outputs from spawned agents.
+- delegate: Synchronous call to a specialist model.
+
+Standard tools: web_search, fetch_url, execute_code, file_read, file_write,
+browser_action, memory_search, memory_store.
+
+Available specialist models for delegation:
+{model_list}
+
+{memory_block}
+
+Strategy:
+- Maximise parallelism — spawn agents for independent subtasks.
+- Use the cheapest model that fits each sub-agent's needs.
+- Delegate to sonar-pro for web research, grok-3 for fast summaries.
+- Keep kimi-k2.5 for coding, reasoning, and complex tasks.
+- Search memory first when the task might relate to prior context.
+- When all sub-agents complete, synthesise a final answer yourself.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Swarm agent
+# ---------------------------------------------------------------------------
+
+class SwarmAgent:
+    """Architecture C: native swarm with memory-aware context injection."""
+
+    def __init__(
+        self,
+        config: SwarmConfig | None = None,
+        router: ModelRouter | None = None,
+    ) -> None:
+        self.config = config or SwarmConfig()
+        self.router = router or ModelRouter()
+        self.workspace = Path(self.config.workspace_dir)
+        self.workspace.mkdir(parents=True, exist_ok=True)
+
+        # -- memory ---------------------------------------------------------
+        db_path = self.config.memory_db or None
+        self.memory_store = MemoryStore(db_path=db_path)
+        self.memory = MemoryManager(
+            store=self.memory_store,
+            user_id=self.config.user_id,
+        )
+
+        # -- session --------------------------------------------------------
+        self.session = SessionContext(
+            session_id=str(uuid.uuid4())[:8],
+            user_id=self.config.user_id,
+        )
+
+        # -- swarm state ----------------------------------------------------
+        self._active_agents: dict[str, asyncio.Task] = {}
+        self._agent_results: dict[str, dict[str, Any]] = {}
+        self._stats = {"tasks": 0, "agents_spawned": 0, "tool_calls": 0}
+
+    # -- public API ---------------------------------------------------------
+
+    async def run(self, task: str, context: str = "") -> str:
+        """Run a task through the swarm coordinator."""
+        result_parts: list[str] = []
+        async for event in self.stream(task, context):
+            if isinstance(event, FinalAnswerEvent):
+                result_parts.append(event.content)
+            elif isinstance(event, ErrorEvent) and not event.recoverable:
+                result_parts.append(f"[ERROR] {event.message}")
+        return "\n".join(result_parts)
+
+    async def stream(self, task: str, context: str = "") -> AsyncGenerator[AgentEvent, None]:
+        """Run the swarm coordinator, yielding events."""
+        self._stats["tasks"] += 1
+        self.session.add_turn("user", task)
+        t0 = time.monotonic()
+
+        # -- build tools (standard + swarm + memory) -------------------------
+        tools = create_default_tools(self.router)
+        register_memory_tools(tools, self.memory)
+        self._register_swarm_tools(tools)
+
+        # -- build system prompt with memory ---------------------------------
+        memory_block = await self.memory.get_context_block(
+            query=task, limit=self.config.memory_context_limit,
+        )
+        model_list = self._model_list_string()
+        system_prompt = SWARM_SYSTEM.format(
+            model_list=model_list,
+            memory_block=memory_block or "(No prior memories.)",
+        )
+
+        # -- run coordinator loop --------------------------------------------
+        agent_config = AgentConfig(
+            model=self.config.coordinator_model,
+            max_iterations=self.config.max_coordinator_iterations,
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature,
+            system_prompt=system_prompt,
+        )
+        coordinator = AgentLoop(
+            router=self.router, tools=tools, config=agent_config,
+        )
+
+        final_content = ""
+        async for event in coordinator.run(task, context=context):
+            if isinstance(event, ToolCallEvent):
+                self._stats["tool_calls"] += 1
+                if self.config.verbose:
+                    log.info("[C] iter=%d tool=%s", event.iteration, event.tool_name)
+            elif isinstance(event, FinalAnswerEvent):
+                final_content = event.content
+            yield event
+
+        elapsed = time.monotonic() - t0
+
+        # -- post-execution --------------------------------------------------
+        # Cancel any lingering agents
+        for aid, atask in self._active_agents.items():
+            if not atask.done():
+                atask.cancel()
+        self._active_agents.clear()
+
+        if final_content:
+            self.session.add_turn("assistant", final_content[:2000])
+        await self.memory_store.save_session(self.session)
+
+        if self.config.auto_extract_memory and final_content:
+            try:
+                await self.memory.auto_extract(
+                    conversation=self.session.to_context_string(last_n=6),
+                    model=self.config.coordinator_model,
+                    router=self.router,
+                )
+            except Exception:
+                pass
+
+        log.info(
+            "[C] Swarm complete: %d agents spawned, %d tool calls, %.1fs",
+            self._stats["agents_spawned"], self._stats["tool_calls"], elapsed,
+        )
+
+    # -- swarm tool implementations -----------------------------------------
+
+    def _register_swarm_tools(self, registry: ToolRegistry) -> None:
+        """Add spawn_agent, collect_results, delegate to the registry."""
+
+        async def _spawn_agent(
+            agent_id: str,
+            task: str,
+            model: str = "",
+            tools: list[str] | None = None,
+            priority: str = "medium",
+        ) -> str:
+            model = model or self.config.default_agent_model
+            if len(self._active_agents) >= self.config.max_parallel_agents:
+                return json.dumps({"error": "Max parallel agents reached"})
+
+            atask = asyncio.create_task(
+                self._run_sub_agent(agent_id, task, model, tools or [])
+            )
+            self._active_agents[agent_id] = atask
+            self._stats["agents_spawned"] += 1
+
+            return json.dumps({
+                "status": "spawned",
+                "agent_id": agent_id,
+                "model": model,
+                "tools": tools or [],
+            })
+
+        async def _collect_results(
+            agent_ids: list[str],
+            timeout: int = 300,
+        ) -> str:
+            results: dict[str, Any] = {}
+
+            # Gather the requested agents
+            tasks_to_wait = {
+                aid: self._active_agents[aid]
+                for aid in agent_ids
+                if aid in self._active_agents
+            }
+
+            if tasks_to_wait:
+                done, pending = await asyncio.wait(
+                    tasks_to_wait.values(),
+                    timeout=timeout,
+                )
+                # Cancel timed-out agents
+                for p in pending:
+                    p.cancel()
+
+            for aid in agent_ids:
+                if aid in self._agent_results:
+                    results[aid] = self._agent_results[aid]
+                elif aid in self._active_agents and self._active_agents[aid].done():
+                    try:
+                        results[aid] = self._active_agents[aid].result()
+                    except Exception as exc:
+                        results[aid] = {"status": "error", "error": str(exc)}
+                else:
+                    results[aid] = {"status": "pending_or_timed_out"}
+
+            return json.dumps(results)
+
+        async def _delegate(
+            model: str,
+            task: str,
+            context: str = "",
+        ) -> str:
+            """Synchronous one-shot delegation to a specialist model."""
+            try:
+                client, model_id = self.router.get_client(model)
+            except KeyError:
+                return json.dumps({"error": f"Unknown model: {model}"})
+
+            messages = [
+                {"role": "system", "content": "Complete this task precisely and concisely."},
+            ]
+            if context:
+                messages.append({"role": "user", "content": f"Context: {context}\n\nTask: {task}"})
+            else:
+                messages.append({"role": "user", "content": task})
+
+            try:
+                resp = await client.chat.completions.create(
+                    model=model_id, messages=messages, max_tokens=8192,
+                )
+                return resp.choices[0].message.content or ""
+            except Exception as exc:
+                return json.dumps({"error": str(exc)})
+
+        # -- Register -------------------------------------------------------
+
+        registry.register(
+            name="spawn_agent",
+            description=(
+                "Spawn a sub-agent to handle a subtask in parallel. "
+                "The agent runs independently and results are collected later."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "agent_id": {
+                        "type": "string",
+                        "description": "Unique ID for this agent (e.g. 'research_1')",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "What this agent should accomplish",
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Which model to use (default: kimi-k2.5)",
+                    },
+                    "tools": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tool names this agent needs",
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["high", "medium", "low"],
+                    },
+                },
+                "required": ["agent_id", "task"],
+            },
+            handler=_spawn_agent,
+        )
+
+        registry.register(
+            name="collect_results",
+            description="Wait for and collect results from spawned sub-agents.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "agent_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "IDs of agents to collect from",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Max seconds to wait (default: 300)",
+                    },
+                },
+                "required": ["agent_ids"],
+            },
+            handler=_collect_results,
+        )
+
+        registry.register(
+            name="delegate",
+            description=(
+                "Synchronous delegation: send a task to a specialist model "
+                "and wait for the result. Use for one-off queries."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "model": {
+                        "type": "string",
+                        "description": "Model name (e.g. 'sonar-pro', 'grok-3')",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "The task to complete",
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Additional context",
+                    },
+                },
+                "required": ["model", "task"],
+            },
+            handler=_delegate,
+        )
+
+    # -- sub-agent execution ------------------------------------------------
+
+    async def _run_sub_agent(
+        self,
+        agent_id: str,
+        task: str,
+        model: str,
+        tool_names: list[str],
+    ) -> dict[str, Any]:
+        """Run a sub-agent with its own AgentLoop."""
+        t0 = time.monotonic()
+
+        # Build scoped tools for this agent
+        base_tools = create_default_tools(self.router)
+        register_memory_tools(base_tools, self.memory)
+
+        if tool_names:
+            tools = base_tools.subset(tool_names)
+        else:
+            tools = base_tools
+
+        # Inject memory context for the sub-agent
+        memory_block = await self.memory.get_context_block(query=task, limit=8)
+
+        output_path = self.workspace / "agents" / agent_id / "output.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        config = AgentConfig(
+            model=model,
+            max_iterations=self.config.max_agent_iterations,
+            max_tokens=8192,
+            system_prompt=(
+                f"You are sub-agent '{agent_id}' in Horizon Orchestra swarm.\n"
+                f"Complete your task and save output to: {output_path}\n\n"
+                f"{memory_block}"
+            ),
+        )
+
+        agent = AgentLoop(router=self.router, tools=tools, config=config)
+
+        output = ""
+        try:
+            async for event in agent.run(task):
+                if isinstance(event, FinalAnswerEvent):
+                    output = event.content
+                elif isinstance(event, ErrorEvent) and not event.recoverable:
+                    result = {
+                        "agent_id": agent_id, "status": "error",
+                        "error": event.message, "model": model,
+                        "duration": time.monotonic() - t0,
+                    }
+                    self._agent_results[agent_id] = result
+                    return result
+        except Exception as exc:
+            result = {
+                "agent_id": agent_id, "status": "error",
+                "error": str(exc), "model": model,
+                "duration": time.monotonic() - t0,
+            }
+            self._agent_results[agent_id] = result
+            return result
+
+        # Persist output
+        try:
+            output_path.write_text(output, encoding="utf-8")
+        except OSError:
+            pass
+
+        result = {
+            "agent_id": agent_id,
+            "status": "complete",
+            "output": output[:5000],  # truncate for coordinator context
+            "output_file": str(output_path),
+            "model": model,
+            "duration": round(time.monotonic() - t0, 1),
+        }
+        self._agent_results[agent_id] = result
+        log.info("[C] Sub-agent %s complete (%.1fs, %s)", agent_id, result["duration"], model)
+        return result
+
+    # -- helpers ------------------------------------------------------------
+
+    def _model_list_string(self) -> str:
+        lines = []
+        for m in self.router.list_models():
+            if m["available"]:
+                lines.append(
+                    f"- {m['name']}: {', '.join(m['strengths'])} "
+                    f"(${m['cost_input']}/{m['cost_output']})"
+                )
+        return "\n".join(lines) or "- kimi-k2.5: reasoning, coding, agentic ($0.60/$2.50)"
+
+    @property
+    def stats(self) -> dict[str, Any]:
+        return {
+            "architecture": "C",
+            "coordinator_model": self.config.coordinator_model,
+            **self._stats,
+            "session_id": self.session.session_id,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Quick-run helper
+# ---------------------------------------------------------------------------
+
+async def run_swarm(
+    task: str,
+    model: str = "kimi-k2.5",
+    user_id: str = "default",
+    verbose: bool = False,
+) -> str:
+    """One-liner to run a task through Architecture C."""
+    config = SwarmConfig(
+        coordinator_model=model, user_id=user_id, verbose=verbose,
+    )
+    agent = SwarmAgent(config=config)
+    return await agent.run(task)
