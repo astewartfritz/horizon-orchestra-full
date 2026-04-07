@@ -21,6 +21,14 @@ from typing import Any, AsyncGenerator, Callable, Awaitable
 import httpx
 
 from .router import ModelRouter
+try:
+    from .security import SecurityMiddleware, SecurityDecision, SecurityAlert
+    HAS_SECURITY = True
+except ImportError:
+    SecurityMiddleware = None  # type: ignore[assignment,misc]
+    SecurityDecision = None  # type: ignore[assignment,misc]
+    SecurityAlert = None  # type: ignore[assignment,misc]
+    HAS_SECURITY = False
 
 __all__ = [
     "AgentConfig",
@@ -197,6 +205,10 @@ class AgentConfig:
         "Use tools iteratively until the task is fully complete. "
         "When finished, respond with your final answer."
     )
+    security: SecurityMiddleware | None = None  # optional security middleware
+    usage_tracker: Any | None = None       # UsageTracker for billing
+    citation_tracker: Any | None = None    # CitationTracker for grounding
+    skill_activator: Any | None = None     # SkillActivator for auto-loading skills
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +272,18 @@ class AgentLoop:
                 )
                 return
 
+            # ── Usage tracking: LLM tokens ─────────────────────────────────────
+            if self.config.usage_tracker:
+                usage = getattr(response, "usage", None)
+                if usage:
+                    _inp = getattr(usage, "prompt_tokens", 0)
+                    _out = getattr(usage, "completion_tokens", 0)
+                    await self.config.usage_tracker.track_llm_call(
+                        model=self.config.model,
+                        input_tokens=_inp,
+                        output_tokens=_out,
+                    )
+
             choice = response.choices[0]
             assistant_msg = choice.message
 
@@ -284,6 +308,17 @@ class AgentLoop:
             # ── No tool calls → we're done ────────────────────────────────
             if not assistant_msg.tool_calls:
                 content = assistant_msg.content or ""
+
+                # ── Citation grounding on final answer ─────────────────────────
+                if self.config.citation_tracker and content:
+                    try:
+                        from .citation import CitationMiddleware
+                        _mw = CitationMiddleware(self.config.citation_tracker)
+                        _grounded = _mw.ground_response(content)
+                        content = _grounded.to_markdown()
+                    except Exception:
+                        pass
+
                 yield FinalAnswerEvent(
                     content=content,
                     total_iterations=iteration,
@@ -298,6 +333,53 @@ class AgentLoop:
                 except json.JSONDecodeError:
                     args = {}
 
+                # ── Security: pre-execution check ──────────────────────
+                if self.config.security:
+                    decision = await self.config.security.pre_execution(
+                        tc.function.name, args, context=task,
+                    )
+                    if not decision.allowed:
+                        log.warning(
+                            "Security blocked tool %s: %s",
+                            tc.function.name, decision.reason,
+                        )
+                        # Inject a "blocked" tool result so the model knows
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps({
+                                "error": f"Security policy blocked this action: {decision.reason}",
+                                "blocked": True,
+                            }),
+                        })
+                        yield ToolResultEvent(
+                            iteration=iteration,
+                            tool_name=tc.function.name,
+                            result=f"[BLOCKED] {decision.reason}",
+                            success=False,
+                            duration=0.0,
+                        )
+                        continue
+                    # Apply any sanitized arguments
+                    if decision.modified_args is not None:
+                        args = decision.modified_args
+
+                # ── Usage tracking: tool call ──────────────────────────────────
+                if self.config.usage_tracker:
+                    allowed, reason = await self.config.usage_tracker.track_tool_call(tc.function.name)
+                    if not allowed:
+                        log.warning("Usage limit blocked tool %s: %s", tc.function.name, reason)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps({"error": f"Usage limit exceeded: {reason}", "blocked": True}),
+                        })
+                        yield ToolResultEvent(
+                            iteration=iteration, tool_name=tc.function.name,
+                            result=f"[LIMIT] {reason}", success=False, duration=0.0,
+                        )
+                        continue
+
                 yield ToolCallEvent(
                     iteration=iteration,
                     tool_name=tc.function.name,
@@ -310,10 +392,28 @@ class AgentLoop:
                 elapsed = time.monotonic() - t0
                 total_tool_calls += 1
 
+                # ── Security: post-execution check ─────────────────────
+                result_content = result.result
+                if self.config.security:
+                    post_decision = await self.config.security.post_execution(
+                        tc.function.name, result_content, elapsed,
+                    )
+                    if post_decision.modified_result is not None:
+                        result_content = post_decision.modified_result
+
+                # ── Citation tracking: register sources from search/fetch ──
+                if self.config.citation_tracker and tc.function.name in ("web_search", "fetch_url"):
+                    try:
+                        self.config.citation_tracker.wrap_tool_result(
+                            tc.function.name, result_content, args,
+                        )
+                    except Exception:
+                        pass
+
                 yield ToolResultEvent(
                     iteration=iteration,
                     tool_name=tc.function.name,
-                    result=result.result[:500],  # truncate for events
+                    result=result_content[:500],
                     success=result.success,
                     duration=elapsed,
                 )
@@ -321,7 +421,7 @@ class AgentLoop:
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": result.result,
+                    "content": result_content,
                 })
 
         # Max iterations reached
@@ -451,12 +551,80 @@ async def tool_browser_action(
     action: str = "navigate",
     selector: str = "",
     value: str = "",
+    wait_for: str = "networkidle",
+    script: str = "",
+    attributes: str = "",
 ) -> str:
-    """Browser automation placeholder (implement with Playwright)."""
+    """Execute a browser automation action via Playwright Chromium.
+    
+    Routes to BrowserConnector when Playwright is available, with graceful
+    fallback to fetch_url for simple page reads.
+    
+    Args:
+        url: Target URL (required for navigate, optional for others)
+        action: One of: navigate, click, type, fill, get_content, get_text,
+                screenshot, evaluate, extract, scroll, hover, press_key,
+                get_state, new_tab, get_cookies, set_cookies
+        selector: CSS selector or text for element-level actions
+        value: Text to type/fill, or JS expression for evaluate, or key name
+        wait_for: Load state to wait for (networkidle, domcontentloaded, load)
+        script: JavaScript to evaluate (for action=evaluate)
+        attributes: Comma-separated attributes to extract (for action=extract)
+    """
+    # Try to use the real BrowserConnector
+    try:
+        from .browser_connector import BrowserConnector
+        
+        # Use a module-level singleton session for efficiency
+        if not hasattr(tool_browser_action, "_connector"):
+            tool_browser_action._connector = BrowserConnector()
+            # Auto-connect using environment config
+            mode = os.environ.get("BROWSER_MODE", "local")
+            remote_url = os.environ.get("BROWSER_REMOTE_URL", "")
+            headless = os.environ.get("BROWSER_HEADLESS", "true").lower() == "true"
+            await tool_browser_action._connector.connect({
+                "mode": "remote_cdp" if remote_url else mode,
+                "headless": str(headless),
+                "remote_url": remote_url,
+                "stealth": "true",
+                "block_ads": "true",
+            })
+        
+        connector: BrowserConnector = tool_browser_action._connector
+        if not connector.connected:
+            raise RuntimeError("Browser connector not available")
+        
+        # Build params for the connector action
+        params: dict[str, Any] = {}
+        if url:
+            params["url"] = url
+        if selector:
+            params["selector"] = selector
+        if value:
+            params["value"] = value
+        if wait_for:
+            params["wait_for"] = wait_for
+        if script:
+            params["script"] = script
+        if attributes:
+            params["attributes"] = [a.strip() for a in attributes.split(",") if a.strip()]
+        
+        result = await connector.execute(action, params)
+        return json.dumps(result)
+    
+    except ImportError:
+        pass  # Playwright not installed
+    except Exception as exc:
+        log.debug("BrowserConnector failed (%s), falling back to fetch_url", exc)
+    
+    # Graceful fallback: use httpx for simple reads
+    if action in ("navigate", "get_content", "get_text"):
+        return await tool_fetch_url(url)
+    
     return json.dumps({
-        "note": "Browser automation not yet wired. Implement with Playwright.",
-        "url": url,
+        "error": "Browser automation requires Playwright. Install with: pip install playwright && playwright install chromium",
         "action": action,
+        "url": url,
     })
 
 
@@ -561,21 +729,72 @@ def create_default_tools(router: ModelRouter | None = None) -> ToolRegistry:
 
     reg.register(
         name="browser_action",
-        description="Perform browser automation: navigate, click, fill forms, screenshot.",
+        description=(
+            "Perform browser automation using a real Chromium browser: navigate pages, "
+            "click elements, type text, extract data, take screenshots, run JavaScript, "
+            "manage cookies, and interact with complex web apps."
+        ),
         parameters={
             "type": "object",
             "properties": {
-                "url": {"type": "string"},
+                "url": {
+                    "type": "string",
+                    "description": "URL to navigate to (required for navigate action)",
+                },
                 "action": {
                     "type": "string",
-                    "enum": ["navigate", "click", "fill", "screenshot", "extract"],
+                    "enum": [
+                        "navigate", "click", "type", "fill", "select",
+                        "get_content", "get_text", "screenshot", "evaluate",
+                        "extract", "extract_table", "scroll", "hover", "press_key",
+                        "get_state", "new_tab", "get_cookies", "set_cookies",
+                        "wait_for", "upload_file",
+                    ],
+                    "description": "Action to perform (default: navigate)",
                 },
-                "selector": {"type": "string", "description": "CSS selector"},
-                "value": {"type": "string", "description": "Value for fill actions"},
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector or visible text for element-level actions",
+                },
+                "value": {
+                    "type": "string",
+                    "description": "Text to type/fill, option value to select, or JS for evaluate",
+                },
+                "wait_for": {
+                    "type": "string",
+                    "enum": ["networkidle", "domcontentloaded", "load"],
+                    "description": "Load state to wait for after navigation (default: networkidle)",
+                },
+                "script": {
+                    "type": "string",
+                    "description": "JavaScript to execute in the page context (for action=evaluate)",
+                },
+                "attributes": {
+                    "type": "string",
+                    "description": "Comma-separated attribute names to extract (for action=extract)",
+                },
             },
-            "required": ["url", "action"],
+            "required": ["action"],
         },
         handler=tool_browser_action,
     )
+
+    # -- audio tools (optional — registered if speech_provider is importable) ---
+    try:
+        from .audio_tools import register_audio_tools
+        register_audio_tools(reg)
+        log.info("Audio tools registered (transcribe, synthesize, analyze, clone, translate)")
+    except ImportError:
+        log.debug("Audio tools not available (speech_provider deps missing)")
+    except Exception as exc:
+        log.debug("Audio tools registration failed: %s", exc)
+
+    # -- council tool (optional) -----------------------------------------------
+    try:
+        from .model_council import register_council_tools
+        register_council_tools(reg)
+        log.info("Council tool registered (council_deliberate)")
+    except Exception as exc:
+        log.debug("Council tool not registered: %s", exc)
 
     return reg

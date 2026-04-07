@@ -1,16 +1,25 @@
 """Architecture A — Monolithic Orchestrator.
 
-Single Kimi K2.5 agent loop with full tool surface and persistent memory.
+Single backbone agent loop with full tool surface and persistent memory.
 The simplest architecture: one model, one loop, up to 300 sequential tool
 calls.  Memory is injected into the system prompt and tools are available
 for the agent to search/store memories mid-execution.
+
+Supports both Kimi K2.5 and Gemma 4 as the backbone model.  When Gemma 4
+is selected, thinking mode and multimodal capabilities are automatically
+enabled based on the model variant.
 
 Usage::
 
     from orchestra.arch_a import MonolithicAgent
     agent = MonolithicAgent(user_id="ashton")
     result = await agent.run("Build a REST API for task management")
-    print(result)
+
+    # With Gemma 4:
+    from orchestra.arch_a import MonolithicConfig
+    config = MonolithicConfig(model="gemma-4-31b", user_id="ashton")
+    agent = MonolithicAgent(config=config)
+    result = await agent.run("Analyse this codebase and refactor")
 """
 
 from __future__ import annotations
@@ -24,6 +33,14 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
 from .router import ModelRouter, ModelConfig
+try:
+    from .skills import SkillRegistry, SkillActivator
+except ImportError:
+    pass
+try:
+    from .citation import CitationTracker, CitationMiddleware
+except ImportError:
+    pass
 from .agent_loop import (
     AgentLoop,
     AgentConfig,
@@ -42,6 +59,8 @@ from .memory import (
     register_memory_tools,
 )
 from .perplexity import PerplexitySearch
+from .security import SecurityMiddleware, standard_policy, strict_policy, safety_critical_policy
+from .domain_router import DomainRouter, TaskClassification, DomainRoute
 
 __all__ = ["MonolithicAgent", "MonolithicConfig"]
 
@@ -65,6 +84,12 @@ class MonolithicConfig:
     auto_extract_memory: bool = True         # extract facts at end of session
     memory_context_limit: int = 15           # memories injected into system prompt
     verbose: bool = False
+    enable_security: bool = True             # enable security middleware
+    security_policy: str = "standard"        # "strict", "standard", "permissive", "safety_critical"
+    enable_domain_routing: bool = False      # auto-route tasks to optimal model
+    enable_skills: bool = True               # auto-activate skills based on task
+    enable_citations: bool = False           # enforce citation grounding (adds latency)
+    skill_dirs: list[str] = field(default_factory=list)  # extra skill directories
 
 
 # ---------------------------------------------------------------------------
@@ -72,13 +97,13 @@ class MonolithicConfig:
 # ---------------------------------------------------------------------------
 
 SYSTEM_TEMPLATE = """\
-You are Horizon Orchestra, an autonomous AI agent powered by Kimi K2.5.
+You are Horizon Orchestra, an autonomous AI agent powered by {model_display}.
 
 You have access to tools for web search, code execution, file I/O,
 browser automation, and persistent memory.  Use them iteratively to
 complete the user's task.  You can call up to {max_iter} tools in
 sequence.
-
+{thinking_block}
 {memory_block}
 
 Rules:
@@ -88,6 +113,51 @@ Rules:
 - When finished, respond with your complete final answer.
 - Cite sources when using web search results.
 """
+
+# Model display name mapping
+MODEL_DISPLAY = {
+    "kimi-k2.5": "Kimi K2.5",
+    "gemma-4-31b": "Gemma 4 31B Dense",
+    "gemma-4-26b-moe": "Gemma 4 26B MoE",
+    "gemma-4-e4b": "Gemma 4 E4B",
+    "gemma-4-e2b": "Gemma 4 E2B",
+    "claude-opus-4.6": "Claude Opus 4.6",
+    "claude-opus-4.6-native": "Claude Opus 4.6",
+    "claude-opus-4.6-openrouter": "Claude Opus 4.6",
+    "claude-sonnet-4.6": "Claude Sonnet 4.6",
+    "claude-sonnet-4.6-openrouter": "Claude Sonnet 4.6",
+    "claude-haiku-4.5": "Claude Haiku 4.5",
+    "claude-haiku-4.5-openrouter": "Claude Haiku 4.5",
+}
+
+
+def _model_display_name(model: str) -> str:
+    """Resolve a human-readable model name."""
+    return MODEL_DISPLAY.get(model, model)
+
+
+def _thinking_block(model: str, router: ModelRouter) -> str:
+    """Build thinking-mode instructions if the model supports it."""
+    try:
+        cfg = router.get_config(model)
+    except KeyError:
+        return ""
+    if not cfg.supports_thinking:
+        return ""
+    if cfg.supports_thinking and model.startswith("claude-"):
+        return (
+            "\nYou have adaptive thinking enabled.  For complex tasks, "
+            "you will automatically engage extended reasoning.  Use your "
+            "interleaved thinking to reason between tool calls — analyse "
+            "results before deciding your next action.  For safety-critical "
+            "tasks, think at maximum effort before acting.\n"
+        )
+    return (
+        "\nYou have thinking/reasoning mode enabled.  For complex tasks, "
+        "reason step-by-step internally before acting.  Use your extended "
+        "reasoning budget for multi-step planning, code analysis, and "
+        "mathematical problem solving.\n"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +193,45 @@ class MonolithicAgent:
         )
         register_memory_tools(self.tools, self.memory)
 
+        # -- security -------------------------------------------------------
+        self.security: SecurityMiddleware | None = None
+        if self.config.enable_security:
+            from .security import (
+                SecurityMiddleware, standard_policy, strict_policy,
+                permissive_policy, safety_critical_policy,
+            )
+            policy_map = {
+                "strict": strict_policy,
+                "standard": standard_policy,
+                "permissive": permissive_policy,
+                "safety_critical": safety_critical_policy,
+            }
+            policy_factory = policy_map.get(self.config.security_policy, standard_policy)
+            self.security = SecurityMiddleware(policy=policy_factory())
+
+        # -- domain router --------------------------------------------------
+        self.domain_router: DomainRouter | None = None
+        if self.config.enable_domain_routing:
+            self.domain_router = DomainRouter(router=self.router)
+
+        # -- skills ---------------------------------------------------------
+        self.skill_activator: Any = None
+        try:
+            from .skills import SkillRegistry, SkillActivator
+            registry = SkillRegistry.default()
+            self.skill_activator = SkillActivator(registry, auto_activate=self.config.enable_skills)
+        except Exception:
+            pass
+
+        # -- citation tracker -----------------------------------------------
+        self.citation_tracker: Any = None
+        if self.config.enable_citations:
+            try:
+                from .citation import CitationTracker
+                self.citation_tracker = CitationTracker()
+            except Exception:
+                pass
+
         # -- session tracking -----------------------------------------------
         self.session = SessionContext(
             session_id=str(uuid.uuid4())[:8],
@@ -156,6 +265,16 @@ class MonolithicAgent:
         self.session.add_turn("user", task)
         t0 = time.monotonic()
 
+        # -- activate skills for this task ----------------------------------
+        skill_prompt_addition = ""
+        if self.skill_activator:
+            try:
+                matches, skill_prompt_addition = self.skill_activator.activate_for_task(task)
+                if matches and self.config.verbose:
+                    log.info("[A] Skills activated: %s", [m.skill.name for m in matches])
+            except Exception:
+                pass
+
         # -- build system prompt with memory context -------------------------
         memory_block = await self.memory.get_context_block(
             query=task,
@@ -163,8 +282,10 @@ class MonolithicAgent:
         )
         system_prompt = SYSTEM_TEMPLATE.format(
             max_iter=self.config.max_iterations,
+            model_display=_model_display_name(self.config.model),
+            thinking_block=_thinking_block(self.config.model, self.router),
             memory_block=memory_block or "(No prior memories for this user.)",
-        )
+        ) + skill_prompt_addition
 
         # -- run agent loop --------------------------------------------------
         agent_config = AgentConfig(
@@ -173,6 +294,9 @@ class MonolithicAgent:
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             system_prompt=system_prompt,
+            security=self.security,
+            usage_tracker=self.config.usage_tracker if hasattr(self.config, 'usage_tracker') else None,
+            citation_tracker=self.citation_tracker,
         )
         agent = AgentLoop(
             router=self.router,
@@ -246,7 +370,7 @@ class MonolithicAgent:
 
     @property
     def stats(self) -> dict[str, Any]:
-        return {
+        base = {
             "architecture": "A",
             "model": self.config.model,
             "total_tasks": self._total_tasks,
@@ -254,7 +378,13 @@ class MonolithicAgent:
             "session_id": self.session.session_id,
             "session_turns": len(self.session.turns),
             "tools_available": self.tools.names,
+            "security_enabled": self.security is not None,
+            "skills_enabled": self.skill_activator is not None,
+            "citations_enabled": self.citation_tracker is not None,
         }
+        if self.security:
+            base["security_stats"] = self.security.stats
+        return base
 
 
 # ---------------------------------------------------------------------------

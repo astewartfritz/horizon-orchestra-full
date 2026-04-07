@@ -41,6 +41,10 @@ class ModelConfig:
     max_context: int = 128_000
     supports_tools: bool = True
     supports_vision: bool = False
+    supports_audio: bool = False
+    supports_thinking: bool = False
+    architecture: str = ""            # "dense", "moe", "efficient", ""
+    parameters_b: float = 0.0         # total param count in billions
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +147,9 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         max_context=200_000,
         supports_tools=True, supports_vision=True,
     ),
+    # NOTE: The fully-featured Claude entries (with native Anthropic provider,
+    # thinking support, and 1M context) are registered below after the Gemma 4
+    # block, following the canonical Claude / Anthropic section.
     "grok-3": ModelConfig(
         model_id="xai/grok-3",
         provider="openrouter",
@@ -154,7 +161,191 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         supports_tools=True, supports_vision=False,
     ),
 
-    # ── Local / Ollama ────────────────────────────────────────────────────
+    # ── Gemma 4 (Google — Apache 2.0) ──────────────────────────────────
+    "gemma-4-31b": ModelConfig(
+        model_id="gemma-4-31b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        api_key_env="GEMINI_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "long_context"),
+        cost_input=0.15, cost_output=0.60,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=30.7,
+    ),
+    "gemma-4-26b-moe": ModelConfig(
+        model_id="gemma-4-26b-a4b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        api_key_env="GEMINI_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "speed"),
+        cost_input=0.10, cost_output=0.40,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="moe", parameters_b=25.2,
+    ),
+    "gemma-4-e4b": ModelConfig(
+        model_id="gemma-4-e4b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        api_key_env="GEMINI_API_KEY",
+        strengths=("speed", "lightweight", "vision", "audio", "on_device"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=True, supports_thinking=True,
+        architecture="efficient", parameters_b=4.5,
+    ),
+    "gemma-4-e2b": ModelConfig(
+        model_id="gemma-4-e2b-it",
+        provider="gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        api_key_env="GEMINI_API_KEY",
+        strengths=("speed", "lightweight", "audio", "on_device"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=128_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=True, supports_thinking=False,
+        architecture="efficient", parameters_b=2.3,
+    ),
+    "gemma-4-31b-openrouter": ModelConfig(
+        model_id="google/gemma-4-31b-it",
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "long_context"),
+        cost_input=0.15, cost_output=0.60,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=30.7,
+    ),
+    "gemma-4-26b-openrouter": ModelConfig(
+        model_id="google/gemma-4-26b-a4b-it",
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "speed"),
+        cost_input=0.10, cost_output=0.40,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="moe", parameters_b=25.2,
+    ),
+    "gemma-4-31b-local": ModelConfig(
+        model_id="google/gemma-4-31B-it",
+        provider="local",
+        base_url="http://localhost:8000/v1",
+        api_key_env="",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "long_context"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=30.7,
+    ),
+    "gemma-4-ollama": ModelConfig(
+        model_id="gemma4:31b",
+        provider="ollama",
+        base_url="http://localhost:11434/v1",
+        api_key_env="",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=30.7,
+    ),
+    "gemma-4-26b-ollama": ModelConfig(
+        model_id="gemma4:26b-a4b",
+        provider="ollama",
+        base_url="http://localhost:11434/v1",
+        api_key_env="",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "speed"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=256_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="moe", parameters_b=25.2,
+    ),
+
+    # ── Claude / Anthropic ─────────────────────────────────────────────────
+    "claude-opus-4.6-native": ModelConfig(
+        model_id="claude-opus-4-6",
+        provider="anthropic",
+        base_url="https://api.anthropic.com/v1",
+        api_key_env="ANTHROPIC_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "long_context"),
+        cost_input=5.00, cost_output=25.00,
+        max_context=1_000_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=0.0,  # undisclosed
+    ),
+    "claude-opus-4.6-openrouter": ModelConfig(
+        model_id="anthropic/claude-opus-4-6",
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "long_context"),
+        cost_input=5.00, cost_output=25.00,
+        max_context=1_000_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=0.0,
+    ),
+    "claude-sonnet-4.6": ModelConfig(
+        model_id="claude-sonnet-4-6",
+        provider="anthropic",
+        base_url="https://api.anthropic.com/v1",
+        api_key_env="ANTHROPIC_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "speed"),
+        cost_input=3.00, cost_output=15.00,
+        max_context=1_000_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=0.0,
+    ),
+    "claude-sonnet-4.6-openrouter": ModelConfig(
+        model_id="anthropic/claude-sonnet-4-6",
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        strengths=("reasoning", "coding", "agentic", "vision", "tool_use", "speed"),
+        cost_input=3.00, cost_output=15.00,
+        max_context=1_000_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=True,
+        architecture="dense", parameters_b=0.0,
+    ),
+    "claude-haiku-4.5": ModelConfig(
+        model_id="claude-haiku-4-5-20251015",
+        provider="anthropic",
+        base_url="https://api.anthropic.com/v1",
+        api_key_env="ANTHROPIC_API_KEY",
+        strengths=("speed", "lightweight", "vision", "tool_use"),
+        cost_input=1.00, cost_output=5.00,
+        max_context=200_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=False,
+        architecture="dense", parameters_b=0.0,
+    ),
+    "claude-haiku-4.5-openrouter": ModelConfig(
+        model_id="anthropic/claude-haiku-4-5-20251015",
+        provider="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        strengths=("speed", "lightweight", "vision", "tool_use"),
+        cost_input=1.00, cost_output=5.00,
+        max_context=200_000,
+        supports_tools=True, supports_vision=True,
+        supports_audio=False, supports_thinking=False,
+        architecture="dense", parameters_b=0.0,
+    ),
+
+    # ── Local / Ollama (other) ─────────────────────────────────────────────
     "ollama-local": ModelConfig(
         model_id="llama3",
         provider="ollama",
@@ -190,6 +381,11 @@ class ModelRouter:
         """Return ``(AsyncOpenAI_client, model_id)`` for *model_name*.
 
         Clients are cached so repeated calls reuse the same connection pool.
+
+        For Gemini-hosted models the Gemini API uses an OpenAI-compatible
+        endpoint at ``/v1beta/openai/``, so we can still return an
+        AsyncOpenAI client.  Native Gemini SDK usage is handled by
+        ``gemma4_provider.py`` for multimodal and thinking features.
         """
         cfg = self.models.get(model_name)
         if cfg is None:
@@ -199,11 +395,42 @@ class ModelRouter:
             api_key = (
                 os.environ.get(cfg.api_key_env, "") if cfg.api_key_env else "not-needed"
             )
+            # Gemini API exposes an OpenAI-compatible layer
+            if cfg.provider == "gemini":
+                base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+            elif cfg.provider == "anthropic":
+                # The native Anthropic API does NOT implement the OpenAI
+                # Messages spec.  Native SDK calls are handled by
+                # opus4_provider.Opus4Provider.  For OpenAI-compatible access,
+                # use the OpenRouter variant (e.g. 'claude-opus-4.6-openrouter').
+                raise ValueError(
+                    "Direct Anthropic API requires the native SDK. "
+                    "Use opus4_provider.Opus4Provider for native features, or use "
+                    "the OpenRouter variant (e.g., 'claude-opus-4.6-openrouter') "
+                    "for OpenAI-compatible access."
+                )
+            else:
+                base_url = cfg.base_url
             self._clients[model_name] = AsyncOpenAI(
-                base_url=cfg.base_url,
+                base_url=base_url,
                 api_key=api_key or "not-needed",
             )
         return self._clients[model_name], cfg.model_id
+
+    def get_config(self, model_name: str) -> ModelConfig:
+        """Return the :class:`ModelConfig` for *model_name*."""
+        cfg = self.models.get(model_name)
+        if cfg is None:
+            raise KeyError(f"Unknown model: {model_name!r}")
+        return cfg
+
+    def is_gemma4(self, model_name: str) -> bool:
+        """Return True if *model_name* is a Gemma 4 variant."""
+        return model_name.startswith("gemma-4")
+
+    def is_claude(self, model_name: str) -> bool:
+        """Return True if *model_name* is a Claude model."""
+        return model_name.startswith("claude-")
 
     # -- intelligent routing ------------------------------------------------
 
@@ -297,6 +524,10 @@ class ModelRouter:
                 "max_context": cfg.max_context,
                 "supports_tools": cfg.supports_tools,
                 "supports_vision": cfg.supports_vision,
+                "supports_audio": cfg.supports_audio,
+                "supports_thinking": cfg.supports_thinking,
+                "architecture": cfg.architecture,
+                "parameters_b": cfg.parameters_b,
                 "available": has_key,
             })
         return out

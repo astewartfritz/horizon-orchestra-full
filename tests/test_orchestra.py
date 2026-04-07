@@ -435,7 +435,9 @@ class DefaultToolsTests(_BaseTest):
         from orchestra.agent_loop import create_default_tools
 
         reg = create_default_tools()
-        expected = {"web_search", "fetch_url", "execute_code", "file_read", "file_write", "browser_action"}
+        core_tools = {"web_search", "fetch_url", "execute_code", "file_read", "file_write", "browser_action"}
+        audio_tools = {"transcribe_audio", "synthesize_speech", "analyze_audio", "clone_voice", "translate_speech", "list_audio_backends"}
+        expected = core_tools | audio_tools
         self.assertEqual(set(reg.names), expected)
 
     def test_openai_format_is_valid(self):

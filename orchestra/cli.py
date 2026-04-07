@@ -3,9 +3,14 @@
 Run directly::
 
     python -m orchestra.cli run "Build a REST API" --arch A
-    python -m orchestra.cli run "Research + build dashboard" --arch C
+    python -m orchestra.cli run "Build a REST API" --arch A --model gemma-4-31b
+    python -m orchestra.cli run "Research + build dashboard" --arch C --model gemma-4-26b-moe
     python -m orchestra.cli serve --port 3000                      # Arch E
+    python -m orchestra.cli serve --model gemma-4-31b              # Arch E with Gemma 4
     python -m orchestra.cli docker                                 # Generate Docker files
+    python -m orchestra.cli gemma4 info                            # Gemma 4 model info
+    python -m orchestra.cli gemma4 modelfile --variant 31b         # Generate Ollama Modelfile
+    python -m orchestra.cli gemma4 vllm --variant 31b              # Generate vLLM command
     python -m orchestra.cli memory search "What projects am I working on?"
     python -m orchestra.cli memory store "I prefer Python over JS" --category preference
 """
@@ -176,6 +181,58 @@ async def cmd_memory(args: argparse.Namespace) -> int:
     return 1
 
 
+async def cmd_gemma4(args: argparse.Namespace) -> int:
+    """Gemma 4 model utilities."""
+    if args.gemma4_action == "info":
+        from .gemma4_provider import Gemma4Provider
+        provider = Gemma4Provider()
+        card = provider.get_model_card(args.model)
+        print(f"\n{C['cyan']}{C['bold']}Gemma 4 Model Card: {card['name']}{C['reset']}")
+        print(f"{C['dim']}{'─' * 52}{C['reset']}")
+        print(f"  Model ID:      {card['model_id']}")
+        print(f"  Provider:      {card['provider']}")
+        print(f"  Architecture:  {card['architecture']}")
+        print(f"  Parameters:    {card['parameters_b']}B")
+        print(f"  Context:       {card['max_context']:,} tokens")
+        print(f"  License:       {card['license']}")
+        print(f"\n{C['cyan']}Capabilities:{C['reset']}")
+        for cap, enabled in card['capabilities'].items():
+            icon = f"{C['green']}✓{C['reset']}" if enabled else f"{C['dim']}✗{C['reset']}"
+            print(f"  {icon} {cap}")
+        if card.get('quantization'):
+            print(f"\n{C['cyan']}Memory Requirements:{C['reset']}")
+            for q, size in card['quantization'].items():
+                print(f"  {q}: {size}")
+        print(f"\n{C['cyan']}Cost:{C['reset']}")
+        print(f"  Input:  ${card['cost']['input_per_1m']}/1M tokens")
+        print(f"  Output: ${card['cost']['output_per_1m']}/1M tokens")
+        print()
+        return 0
+
+    elif args.gemma4_action == "modelfile":
+        from .gemma4_provider import generate_ollama_modelfile
+        content = generate_ollama_modelfile(variant=args.variant)
+        Path(args.output).write_text(content, encoding="utf-8")
+        print(f"{C['green']}Generated:{C['reset']} {args.output}")
+        print(f"{C['dim']}Deploy: ollama create gemma4-orchestra -f {args.output}{C['reset']}")
+        return 0
+
+    elif args.gemma4_action == "vllm":
+        from .gemma4_provider import generate_vllm_command
+        cmd = generate_vllm_command(
+            variant=args.variant,
+            tensor_parallel=args.gpus,
+            port=args.port,
+        )
+        print(f"\n{C['cyan']}vLLM Serve Command:{C['reset']}\n")
+        print(cmd)
+        print()
+        return 0
+
+    print(f"{C['red']}Unknown gemma4 action. Use: info, modelfile, vllm{C['reset']}")
+    return 1
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -229,7 +286,275 @@ def build_parser() -> argparse.ArgumentParser:
     list_p.add_argument("--user", default="default")
     list_p.add_argument("--limit", type=int, default=50)
 
+    # -- gemma4 -------------------------------------------------------------
+    g4_p = sub.add_parser("gemma4", help="Gemma 4 model tools")
+    g4_sub = g4_p.add_subparsers(dest="gemma4_action")
+
+    info_p = g4_sub.add_parser("info", help="Show Gemma 4 model capabilities")
+    info_p.add_argument("--model", default="gemma-4-31b",
+                        help="Gemma 4 variant to inspect")
+
+    mf_p = g4_sub.add_parser("modelfile", help="Generate Ollama Modelfile")
+    mf_p.add_argument("--variant", default="31b",
+                      choices=["31b", "26b-a4b", "e4b", "e2b"])
+    mf_p.add_argument("--output", default="Modelfile")
+
+    vllm_p = g4_sub.add_parser("vllm", help="Generate vLLM serve command")
+    vllm_p.add_argument("--variant", default="31b",
+                        choices=["31b", "26b-a4b", "e4b", "e2b"])
+    vllm_p.add_argument("--gpus", type=int, default=1)
+    vllm_p.add_argument("--port", type=int, default=8000)
+
+    # -- skills subcommand --------------------------------------------------
+    skills_p = sub.add_parser("skills", help="Skill management")
+    skills_sub = skills_p.add_subparsers(dest="skills_action")
+    
+    sk_list = skills_sub.add_parser("list", help="List all available skills")
+    sk_list.add_argument("--builtin-only", action="store_true")
+    sk_list.add_argument("--custom-only", action="store_true")
+    
+    sk_match = skills_sub.add_parser("match", help="Find skills matching a task")
+    sk_match.add_argument("task", help="Task description to match against")
+    sk_match.add_argument("--max", type=int, default=3)
+    
+    sk_show = skills_sub.add_parser("show", help="Show a skill's full instructions")
+    sk_show.add_argument("name", help="Skill name")
+    
+    sk_create = skills_sub.add_parser("create", help="Create a skill from a description")
+    sk_create.add_argument("name")
+    sk_create.add_argument("description")
+    sk_create.add_argument("--instructions", default="", help="Path to instructions file or inline text")
+
+    # -- tasks subcommand ---------------------------------------------------
+    tasks_p = sub.add_parser("tasks", help="Task management")
+    tasks_sub = tasks_p.add_subparsers(dest="tasks_action")
+    
+    t_list = tasks_sub.add_parser("list", help="List tasks")
+    t_list.add_argument("--status", default="", help="Filter by status")
+    
+    t_submit = tasks_sub.add_parser("submit", help="Submit a task")
+    t_submit.add_argument("prompt", help="Task prompt")
+    t_submit.add_argument("--name", default="")
+    t_submit.add_argument("--model", default="")
+    t_submit.add_argument("--cron", default="", help="Cron expression for scheduling")
+    
+    t_status = tasks_sub.add_parser("status", help="Get task status")
+    t_status.add_argument("task_id")
+    
+    t_pause = tasks_sub.add_parser("pause", help="Pause a running task")
+    t_pause.add_argument("task_id")
+    
+    t_resume = tasks_sub.add_parser("resume", help="Resume a paused task")
+    t_resume.add_argument("task_id")
+    
+    t_cancel = tasks_sub.add_parser("cancel", help="Cancel a task")
+    t_cancel.add_argument("task_id")
+
+    # -- council subcommand -------------------------------------------------
+    council_p = sub.add_parser("council", help="Model Council -- parallel multi-model deliberation")
+    council_p.add_argument("prompt", help="Prompt to deliberate on")
+    council_p.add_argument("--models", default="", help="Comma-separated model names")
+    council_p.add_argument("--orchestrator", default="", help="Model to synthesize results")
+
+    # -- models subcommand --------------------------------------------------
+    models_p = sub.add_parser("models", help="List and query available models")
+    models_sub = models_p.add_subparsers(dest="models_action")
+    
+    m_list = models_sub.add_parser("list", help="List all registered models")
+    m_list.add_argument("--available-only", action="store_true", help="Only show models with API keys configured")
+    m_list.add_argument("--json", dest="json_out", action="store_true")
+    
+    m_info = models_sub.add_parser("info", help="Get model capabilities")
+    m_info.add_argument("model_name")
+
+    # -- connectors subcommand ----------------------------------------------
+    conn_p = sub.add_parser("connectors", help="List available connectors")
+    conn_p.add_argument("--status", action="store_true", help="Show connection status")
+
     return parser
+
+
+# ---------------------------------------------------------------------------
+# New command handlers
+# ---------------------------------------------------------------------------
+
+async def cmd_skills(args: argparse.Namespace) -> int:
+    from .skills import SkillRegistry
+    registry = SkillRegistry.default()
+    action = getattr(args, "skills_action", None)
+    
+    if action == "list" or not action:
+        skills = registry.all_skills
+        if getattr(args, "builtin_only", False):
+            skills = registry.builtin_skills
+        elif getattr(args, "custom_only", False):
+            skills = registry.custom_skills
+        print(f"\n{'─'*60}")
+        print(f"  Orchestra Skills  ({len(skills)} total)")
+        print(f"{'─'*60}")
+        for s in skills:
+            tag = "[builtin]" if s.is_builtin else "[custom]"
+            chains = f" -> {', '.join(s.chains_to)}" if s.chains_to else ""
+            print(f"  {s.name:<30} {tag}{chains}")
+            print(f"    {s.description[:70]}")
+        return 0
+    
+    elif action == "match":
+        matches = registry.match(args.task, max_skills=args.max)
+        print(f"\nSkills matching: '{args.task}'")
+        print(f"{'─'*60}")
+        for m in matches:
+            print(f"  {m.skill.name:<30} score={m.score:.2f}")
+            print(f"    {m.trigger_reason}")
+        return 0
+    
+    elif action == "show":
+        skill = registry.get(args.name)
+        if not skill:
+            print(f"Skill '{args.name}' not found.")
+            return 1
+        print(f"\n## {skill.name} (v{skill.version})")
+        print(f"\n**Description:** {skill.description}")
+        if skill.tools_required:
+            print(f"**Tools:** {', '.join(skill.tools_required)}")
+        if skill.models_preferred:
+            print(f"**Models:** {', '.join(skill.models_preferred)}")
+        if skill.chains_to:
+            print(f"**Chains to:** {', '.join(skill.chains_to)}")
+        print(f"\n{skill.instructions}")
+        return 0
+    
+    elif action == "create":
+        skill = registry.create_skill_from_description(
+            name=args.name,
+            description=args.description,
+            instructions=args.instructions or f"# {args.name}\n\n{args.description}",
+        )
+        path = registry.save_skill(skill)
+        print(f"Skill '{skill.name}' created at {path}")
+        return 0
+    
+    return 0
+
+
+async def cmd_tasks(args: argparse.Namespace) -> int:
+    import json as _json
+    from .tasks import TaskManager, TaskSpec, Schedule, TaskStatus
+    manager = TaskManager()
+    action = getattr(args, "tasks_action", None)
+    
+    if action == "list" or not action:
+        status_filter = TaskStatus(args.status) if getattr(args, "status", "") else None
+        tasks = await manager.list_tasks(status=status_filter)
+        print(f"\n{'─'*70}")
+        print(f"  Tasks  ({len(tasks)} found)")
+        print(f"{'─'*70}")
+        for t in tasks:
+            dur = f"{t.duration_seconds:.0f}s" if t.duration_seconds else ""
+            print(f"  {t.id[:12]:<14} {t.status.value:<20} {t.name[:30]:<32} {dur}")
+        return 0
+    
+    elif action == "submit":
+        schedule = Schedule(cron=args.cron) if getattr(args, "cron", "") else None
+        spec = TaskSpec(
+            name=getattr(args, "name", "") or args.prompt[:40],
+            prompt=args.prompt,
+            model=getattr(args, "model", "") or "claude-opus-4.6-openrouter",
+            schedule=schedule,
+        )
+        task_id = await manager.submit(spec)
+        print(f"Task submitted: {task_id}")
+        return 0
+    
+    elif action == "status":
+        task = await manager.get_status(args.task_id)
+        if not task:
+            print(f"Task {args.task_id} not found.")
+            return 1
+        print(_json.dumps(task.to_dict(), indent=2, default=str))
+        return 0
+    
+    elif action in ("pause", "resume", "cancel"):
+        fn = getattr(manager, action)
+        ok = await fn(args.task_id)
+        print(f"Task {args.task_id}: {action}d" if ok else f"Failed to {action} {args.task_id}")
+        return 0 if ok else 1
+    
+    return 0
+
+
+async def cmd_council(args: argparse.Namespace) -> int:
+    from .router import ModelRouter
+    from .model_council import ModelCouncil
+    router = ModelRouter()
+    council = ModelCouncil(router=router)
+    models = [m.strip() for m in args.models.split(",") if m.strip()] if args.models else None
+    print(f"\nModel Council deliberating...\nModels: {models or 'default'}")
+    print(f"{'─'*60}")
+    result = await council.deliberate(
+        prompt=args.prompt,
+        models=models,
+        orchestrator=getattr(args, "orchestrator", "") or "",
+    )
+    print(result.to_markdown())
+    print(f"\nAgreement score: {result.agreement_score:.2f}")
+    if result.failed_models:
+        print(f"Failed models: {result.failed_models}")
+    return 0
+
+
+async def cmd_models(args: argparse.Namespace) -> int:
+    import json as _json
+    from .router import ModelRouter
+    router = ModelRouter()
+    action = getattr(args, "models_action", None)
+    
+    if action == "list" or not action:
+        models = router.list_models()
+        if getattr(args, "available_only", False):
+            models = [m for m in models if m["available"]]
+        if getattr(args, "json_out", False):
+            print(_json.dumps(models, indent=2))
+            return 0
+        print(f"\n{'─'*80}")
+        print(f"  Orchestra Models  ({len(models)} registered)")
+        print(f"{'─'*80}")
+        for m in models:
+            avail = "v" if m["available"] else "x"
+            ctx = f"{m['max_context']//1000}K"
+            cost = f"${m['cost_input']}/{m['cost_output']}"
+            think = "[T]" if m.get("supports_thinking") else ""
+            vis = "[V]" if m.get("supports_vision") else ""
+            print(f"  {avail} {m['name']:<35} {ctx:<6} {cost:<12} {think}{vis}")
+            print(f"      {', '.join(m['strengths'][:4])}")
+        return 0
+    
+    elif action == "info":
+        try:
+            cfg = router.get_config(args.model_name)
+            print(f"\n## {args.model_name}")
+            for k, v in cfg.__dict__.items():
+                print(f"  {k}: {v}")
+        except KeyError:
+            print(f"Model '{args.model_name}' not found.")
+            return 1
+        return 0
+    
+    return 0
+
+
+async def cmd_connectors(args: argparse.Namespace) -> int:
+    from .arch_e import ConnectorRegistry
+    reg = ConnectorRegistry.default()
+    conns = reg.list_connectors()
+    print(f"\n{'─'*60}")
+    print(f"  Orchestra Connectors  ({len(conns)} registered)")
+    print(f"{'─'*60}")
+    for c in conns:
+        status = "v connected" if c["connected"] else "x not connected"
+        tools_str = ", ".join(c["tools"][:4])
+        print(f"  {c['name']:<20} {status:<16}  Tools: {tools_str}")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +575,12 @@ def main() -> int:
         "serve": cmd_serve,
         "docker": cmd_docker,
         "memory": cmd_memory,
+        "gemma4": cmd_gemma4,
+        "skills": cmd_skills,
+        "tasks": cmd_tasks,
+        "council": cmd_council,
+        "models": cmd_models,
+        "connectors": cmd_connectors,
     }
     handler = dispatch.get(args.command)
     if not handler:

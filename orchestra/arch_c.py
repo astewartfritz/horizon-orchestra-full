@@ -1,9 +1,16 @@
-"""Architecture C — Native Kimi K2.5 Agent Swarm.
+"""Architecture C — Native Agent Swarm.
 
 The model itself decides when to spawn sub-agents, what they specialise
-in, and when to merge results.  This leverages K2.5's built-in swarm
-coordination (up to 100 parallel agents) with memory-aware context
-injection at every level.
+in, and when to merge results.  Supports both Kimi K2.5 and Gemma 4 as
+coordinator/agent backbones with memory-aware context injection at every
+level.
+
+Gemma 4 additions:
+- Coordinator and agents can use any Gemma 4 variant (31B, 26B MoE,
+  E4B, E2B) alongside Kimi K2.5.
+- Cost-optimised routing: use Gemma 4 26B MoE for fast parallel agents,
+  Gemma 4 31B for complex reasoning tasks.
+- Thinking mode enabled for coordinator when using a supported model.
 
 The coordinator has three swarm-specific tools on top of the standard
 tool surface:
@@ -12,15 +19,12 @@ tool surface:
 * ``collect_results`` — gather outputs from spawned agents
 * ``delegate`` — synchronous one-shot delegation to a specialist model
 
-Memory is shared across all agents via the same MemoryStore, so
-sub-agents can search for and store user context.
-
 Usage::
 
-    from orchestra.arch_c import SwarmAgent
-    agent = SwarmAgent(user_id="ashton")
-    result = await agent.run("Research Kimi K2.5 benchmarks and build a comparison dashboard")
-    print(result)
+    from orchestra.arch_c import SwarmAgent, SwarmConfig
+    config = SwarmConfig(coordinator_model="gemma-4-31b", default_agent_model="gemma-4-26b-moe")
+    agent = SwarmAgent(config=config, user_id="ashton")
+    result = await agent.run("Research and build a comparison dashboard")
 """
 
 from __future__ import annotations
@@ -35,6 +39,8 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from .router import ModelRouter
+from .security import SecurityMiddleware, standard_policy, strict_policy
+from .domain_router import DomainRouter
 from .agent_loop import (
     AgentLoop,
     AgentConfig,
@@ -79,6 +85,11 @@ class SwarmConfig:
     auto_extract_memory: bool = True
     memory_context_limit: int = 15
     verbose: bool = False
+    enable_security: bool = True
+    security_policy: str = "standard"
+    enable_domain_routing: bool = False
+    enable_skills: bool = True
+    enable_citations: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +98,7 @@ class SwarmConfig:
 
 SWARM_SYSTEM = """\
 You are Horizon Orchestra operating in Agent Swarm mode (Architecture C),
-powered by Kimi K2.5.
+powered by {model_display}.
 
 You are an autonomous coordinator that can:
 1. Analyse complex tasks and decompose them into parallel subtasks.
@@ -95,7 +106,7 @@ You are an autonomous coordinator that can:
 3. Delegate one-off questions to specialist models.
 4. Collect and merge results from sub-agents.
 5. Search and store persistent user memory.
-
+{thinking_block}
 Swarm tools:
 - spawn_agent: Create a sub-agent (runs in parallel).
 - collect_results: Gather outputs from spawned agents.
@@ -113,10 +124,31 @@ Strategy:
 - Maximise parallelism — spawn agents for independent subtasks.
 - Use the cheapest model that fits each sub-agent's needs.
 - Delegate to sonar-pro for web research, grok-3 for fast summaries.
-- Keep kimi-k2.5 for coding, reasoning, and complex tasks.
+- Use gemma-4-26b-moe for fast parallel agents that still reason well.
+- Use gemma-4-31b or kimi-k2.5 for coding, reasoning, and complex tasks.
+- Use gemma-4-e4b for lightweight tasks (summaries, classification, extraction).
+- Use claude-opus-4.6 for complex reasoning, coding, and safety-critical tasks (1M context, adaptive thinking).
+- Use claude-sonnet-4.6 for balanced agents — near-Opus quality at 5x lower cost.
+- Use claude-haiku-4.5 for high-throughput lightweight tasks ($1/$5 per 1M tokens).
 - Search memory first when the task might relate to prior context.
 - When all sub-agents complete, synthesise a final answer yourself.
 """
+
+# Model display name mapping
+MODEL_DISPLAY = {
+    "kimi-k2.5": "Kimi K2.5",
+    "gemma-4-31b": "Gemma 4 31B Dense",
+    "gemma-4-26b-moe": "Gemma 4 26B MoE",
+    "gemma-4-e4b": "Gemma 4 E4B",
+    "gemma-4-e2b": "Gemma 4 E2B",
+    "claude-opus-4.6": "Claude Opus 4.6",
+    "claude-opus-4.6-native": "Claude Opus 4.6",
+    "claude-opus-4.6-openrouter": "Claude Opus 4.6",
+    "claude-sonnet-4.6": "Claude Sonnet 4.6",
+    "claude-sonnet-4.6-openrouter": "Claude Sonnet 4.6",
+    "claude-haiku-4.5": "Claude Haiku 4.5",
+    "claude-haiku-4.5-openrouter": "Claude Haiku 4.5",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +175,45 @@ class SwarmAgent:
             store=self.memory_store,
             user_id=self.config.user_id,
         )
+
+        # -- security -------------------------------------------------------
+        self.security: SecurityMiddleware | None = None
+        if self.config.enable_security:
+            from .security import (
+                SecurityMiddleware, standard_policy, strict_policy,
+                permissive_policy, safety_critical_policy,
+            )
+            policy_map = {
+                "strict": strict_policy,
+                "standard": standard_policy,
+                "permissive": permissive_policy,
+                "safety_critical": safety_critical_policy,
+            }
+            policy_factory = policy_map.get(self.config.security_policy, standard_policy)
+            self.security = SecurityMiddleware(policy=policy_factory())
+
+        # -- domain router --------------------------------------------------
+        self.domain_router: DomainRouter | None = None
+        if self.config.enable_domain_routing:
+            self.domain_router = DomainRouter(router=self.router)
+
+        # -- skills ---------------------------------------------------------
+        self.skill_activator: Any = None
+        try:
+            from .skills import SkillRegistry, SkillActivator
+            registry = SkillRegistry.default()
+            self.skill_activator = SkillActivator(registry, auto_activate=self.config.enable_skills)
+        except Exception:
+            pass
+
+        # -- citation tracker -----------------------------------------------
+        self.citation_tracker: Any = None
+        if self.config.enable_citations:
+            try:
+                from .citation import CitationTracker
+                self.citation_tracker = CitationTracker()
+            except Exception:
+                pass
 
         # -- session --------------------------------------------------------
         self.session = SessionContext(
@@ -178,15 +249,44 @@ class SwarmAgent:
         register_memory_tools(tools, self.memory)
         self._register_swarm_tools(tools)
 
+        # -- activate skills for this task ----------------------------------
+        skill_prompt_addition = ""
+        if self.skill_activator:
+            try:
+                matches, skill_prompt_addition = self.skill_activator.activate_for_task(task)
+                if matches and self.config.verbose:
+                    log.info("[C] Skills activated: %s", [m.skill.name for m in matches])
+            except Exception:
+                pass
+
         # -- build system prompt with memory ---------------------------------
         memory_block = await self.memory.get_context_block(
             query=task, limit=self.config.memory_context_limit,
         )
         model_list = self._model_list_string()
+
+        # Thinking block for Gemma 4 models
+        thinking_block = ""
+        try:
+            coord_cfg = self.router.get_config(self.config.coordinator_model)
+            if coord_cfg.supports_thinking:
+                thinking_block = (
+                    "\nYou have thinking/reasoning mode enabled.  For complex "
+                    "decomposition, reason step-by-step internally before "
+                    "spawning agents.  Plan your swarm strategy carefully.\n"
+                )
+        except KeyError:
+            pass
+
+        model_display = MODEL_DISPLAY.get(
+            self.config.coordinator_model, self.config.coordinator_model
+        )
         system_prompt = SWARM_SYSTEM.format(
+            model_display=model_display,
+            thinking_block=thinking_block,
             model_list=model_list,
             memory_block=memory_block or "(No prior memories.)",
-        )
+        ) + skill_prompt_addition
 
         # -- run coordinator loop --------------------------------------------
         agent_config = AgentConfig(
@@ -195,6 +295,8 @@ class SwarmAgent:
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             system_prompt=system_prompt,
+            security=self.security,
+            citation_tracker=self.citation_tracker,
         )
         coordinator = AgentLoop(
             router=self.router, tools=tools, config=agent_config,
@@ -451,6 +553,8 @@ class SwarmAgent:
                 f"Complete your task and save output to: {output_path}\n\n"
                 f"{memory_block}"
             ),
+            security=self.security,  # propagate security to sub-agents
+            citation_tracker=self.citation_tracker if self.config.enable_citations else None,
         )
 
         agent = AgentLoop(router=self.router, tools=tools, config=config)
@@ -509,12 +613,16 @@ class SwarmAgent:
 
     @property
     def stats(self) -> dict[str, Any]:
-        return {
+        base = {
             "architecture": "C",
             "coordinator_model": self.config.coordinator_model,
             **self._stats,
             "session_id": self.session.session_id,
+            "security_enabled": self.security is not None,
         }
+        if self.security:
+            base["security_stats"] = self.security.stats
+        return base
 
 
 # ---------------------------------------------------------------------------
