@@ -1,0 +1,44 @@
+"""Horizon Orchestra — External Service Connectors.
+
+Each connector implements the Connector ABC and provides:
+1. OAuth2, token, or key-based authentication
+2. Action execution via a unified execute() interface
+3. OpenAI-format tool definitions for agent integration
+"""
+
+from .base import Connector, ConnectorRegistry
+from .gmail import GmailConnector
+from .github import GitHubConnector
+from .slack import SlackConnector
+from .notion import NotionConnector
+from .linear import LinearConnector
+from .snowflake import SnowflakeConnector
+from .gcal import GoogleCalendarConnector
+from .gdrive import GoogleDriveConnector
+from .jira import JiraConnector
+from .hubspot import HubSpotConnector
+from .airtable import AirtableConnector
+from .stripe import StripeConnector
+from .aws import AWSConnector
+from .monday import MondayConnector
+from .mcp_bridge import MCPBridge
+
+__all__ = [
+    "Connector",
+    "ConnectorRegistry",
+    "GmailConnector",
+    "GitHubConnector",
+    "SlackConnector",
+    "NotionConnector",
+    "LinearConnector",
+    "SnowflakeConnector",
+    "GoogleCalendarConnector",
+    "GoogleDriveConnector",
+    "JiraConnector",
+    "HubSpotConnector",
+    "AirtableConnector",
+    "StripeConnector",
+    "AWSConnector",
+    "MondayConnector",
+    "MCPBridge",
+]

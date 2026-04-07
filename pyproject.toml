@@ -1,0 +1,126 @@
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "horizon-orchestra"
+version = "0.1.0"
+description = "Agentic AI harness — orchestrate Kimi K2.5 across five architectures with persistent memory, browser automation, and cloud-native deployment."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Ashton Fritz", email = "ashtonfritz3@gmail.com" },
+]
+keywords = [
+    "ai", "agent", "orchestration", "kimi", "llm",
+    "browser-automation", "mcp", "rag", "swarm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# -- Core dependencies (always installed) ------------------------------------
+dependencies = [
+    "openai>=1.60.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+# API server
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "python-multipart>=0.0.9",
+    "PyJWT>=2.9.0",
+]
+
+# Cloud (AWS Lambda / DynamoDB)
+cloud = [
+    "boto3>=1.34.0",
+]
+
+# Browser automation (Frontier + browser tools)
+browser = [
+    "playwright>=1.45.0",
+]
+
+# Finance terminal
+finance = [
+    "yfinance>=0.2.40",
+]
+
+# Push notifications
+push = [
+    "pywebpush>=2.0.0",
+]
+
+# Local model serving
+vllm = [
+    "vllm>=0.6.0",
+]
+
+# Data science skills
+data = [
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "matplotlib>=3.9.0",
+    "scikit-learn>=1.5.0",
+    "scipy>=1.14.0",
+]
+
+# Development / testing
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0",
+    "mypy>=1.11.0",
+]
+
+# Everything
+all = [
+    "horizon-orchestra[api,cloud,browser,finance,push,data,dev]",
+]
+
+[project.urls]
+Homepage = "https://horizon-orchestra.com"
+Repository = "https://github.com/astewartfritz/horizon-orchestra"
+Documentation = "https://horizon-orchestra.com/docs"
+
+[project.scripts]
+horizon = "orchestra.cli:main"
+orchestra = "orchestra.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["orchestra"]
+
+# -- Ruff (linting + formatting) ---------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501", "B905", "RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["orchestra"]
+
+# -- Mypy --------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+# -- Pytest -------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]

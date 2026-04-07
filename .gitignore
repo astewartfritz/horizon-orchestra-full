@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.pyc
+
+# Node.js
+node_modules/
+sdk/dist/
+node/dist/
+*.tsbuildinfo
+
+# Rust
+rust/target/
+*.rlib
+
+# Go
+go/bin/
+go/pkg/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Data / runtime
+*.sqlite3
+*.db
+/data/
+/workspace/
+browser_profiles/
+*.log
+logs/
+
+# Upstream reference repos (dev only, not part of release)
+claude_code_upstream/
+codex_upstream/
+dify_upstream/
+openclaw_upstream/
+chromium_depot_tools/
+repo/
+
+# Playwright
+playwright-report/
+test-results/
+
+# Docker
+.docker/
