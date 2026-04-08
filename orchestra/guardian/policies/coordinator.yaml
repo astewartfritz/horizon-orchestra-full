@@ -1,0 +1,158 @@
+# Coordinator Agent Policy
+# Applies to agents matching "coordinator-*".  Full permissions
+# for orchestrating multi-agent workflows: spawn, handoff,
+# broadcast, all models, enterprise connectors, and code execution.
+---
+policy_id: "coordinator"
+version: 1
+default_action: deny
+agent_pattern: "coordinator-*"
+description: "Full-privilege coordinator policy for multi-agent orchestration."
+enabled: true
+tags:
+  - coordinator
+  - privileged
+  - internal
+
+rules:
+  # Network: all inference + enterprise endpoints
+  - resource: network
+    action: outbound
+    destinations:
+      - "*.moonshot.ai"
+      - "*.openrouter.ai"
+      - "*.together.xyz"
+      - "*.perplexity.ai"
+      - "*.googleapis.com"
+      - "*.openai.com"
+      - "*.anthropic.com"
+      - "*.salesforce.com"
+      - "*.force.com"
+      - "*.google.com"
+      - "*.microsoft.com"
+      - "graph.microsoft.com"
+      - "*.slack.com"
+      - "*.notion.so"
+      - "localhost"
+      - "127.0.0.1"
+    effect: allow
+    description: "Full network access (inference + enterprise + local)"
+
+  # Filesystem: full workspace + tmp
+  - resource: filesystem
+    action: read
+    paths:
+      - "/workspace/*"
+      - "/tmp/*"
+    effect: allow
+
+  - resource: filesystem
+    action: write
+    paths:
+      - "/workspace/*"
+      - "/tmp/*"
+    effect: allow
+
+  # Filesystem: system paths require approval
+  - resource: filesystem
+    action: read
+    paths:
+      - "/etc/*"
+    effect: allow_with_approval
+    requires_approval: true
+    description: "System config reads require approval"
+
+  # Models: all tiers
+  - resource: model
+    action: "*"
+    allowed_models:
+      - "kimi-k2.5"
+      - "kimi-k2.5-openrouter"
+      - "kimi-k2.5-together"
+      - "kimi-k2.5-local"
+      - "gemma-4-31b"
+      - "gemma-4-26b-moe"
+      - "gemma-4-12b"
+      - "gemma-4-e4b"
+      - "gemma-4-e2b"
+      - "gemma-4-31b-vllm"
+      - "gemma-4-e4b-vllm"
+      - "gemma-4-ollama"
+      - "gemma-4-hf"
+      - "sonar"
+      - "sonar-pro"
+      - "sonar-reasoning-pro"
+      - "gpt-5.4"
+      - "claude-opus-4.6"
+      - "grok-3"
+      - "ollama-local"
+    effect: allow
+    description: "All registered models"
+
+  # Tools: everything, destructive needs approval
+  - resource: tool
+    action: call
+    tools:
+      - "search"
+      - "read_file"
+      - "write_file"
+      - "list_files"
+      - "get_record"
+      - "query_records"
+      - "create_record"
+      - "update_record"
+      - "send_email"
+      - "schedule_meeting"
+      - "post_message"
+      - "execute_code"
+      - "deploy"
+    effect: allow
+    description: "Full tool access"
+
+  - resource: tool
+    action: call
+    tools:
+      - "delete_record"
+      - "bulk_delete"
+      - "drop_table"
+      - "bulk_update"
+    effect: allow_with_approval
+    requires_approval: true
+    approval_timeout: 600
+    description: "Destructive tools require approval even for coordinators"
+
+  # Connectors: all enterprise
+  - resource: connector
+    action: "*"
+    connectors:
+      - "salesforce"
+      - "google"
+      - "microsoft"
+      - "meta"
+      - "amazon"
+      - "slack"
+      - "notion"
+    effect: allow
+    description: "All enterprise connectors"
+
+  # Memory: full access
+  - resource: memory
+    action: "*"
+    effect: allow
+    description: "Full memory access"
+
+  # Agent: spawn + handoff + broadcast
+  - resource: agent
+    action: spawn
+    effect: allow
+    description: "Can spawn sub-agents"
+
+  - resource: agent
+    action: handoff
+    effect: allow
+    description: "Can hand off to other agents"
+
+  - resource: agent
+    action: broadcast
+    effect: allow
+    description: "Can broadcast to multiple agents"

@@ -51,6 +51,37 @@ from .arch_c import SwarmAgent, SwarmConfig
 from .arch_d import MCPToolHub, MCPHubConfig
 from .arch_e import ProductionOrchestrator, ProductionConfig
 
+# ── Enterprise connectors (big 5 platforms) ───────────────────────────────
+try:
+    from .connectors.salesforce       import SalesforceConnector
+    from .connectors.google_workspace  import GoogleWorkspaceConnector
+    from .connectors.microsoft365      import Microsoft365Connector
+    from .connectors.meta_business     import MetaBusinessConnector
+    from .connectors.amazon_business   import AmazonBusinessConnector
+except Exception:
+    SalesforceConnector = GoogleWorkspaceConnector = Microsoft365Connector = None  # type: ignore
+    MetaBusinessConnector = AmazonBusinessConnector = None  # type: ignore
+
+# ── Multi-orchestrator teams ───────────────────────────────────────────
+try:
+    from .teams import OrchestraTeam, TeamConfig, ContextBus, TeamMemory, InterAgentTrust
+    from .teams.pre_built_teams import (
+        enterprise_connect_team, coding_team, research_team, sales_team
+    )
+except Exception:
+    OrchestraTeam = TeamConfig = ContextBus = TeamMemory = InterAgentTrust = None  # type: ignore
+    enterprise_connect_team = coding_team = research_team = sales_team = None  # type: ignore
+
+# ── Beyond NemoClaw security guardian ───────────────────────────────
+try:
+    from .guardian import (
+        InferenceGateway, PolicyEngine,
+        CapabilityLattice, AuditLedger, BeyondGuardrails,
+    )
+except Exception:
+    InferenceGateway = PolicyEngine = CapabilityLattice = None  # type: ignore
+    AuditLedger = BeyondGuardrails = None  # type: ignore
+
 # Gemma 4 provider (lazy — only if available)
 try:
     from .gemma4_provider import (

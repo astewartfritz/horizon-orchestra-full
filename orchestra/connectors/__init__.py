@@ -22,6 +22,11 @@ from .stripe import StripeConnector
 from .aws import AWSConnector
 from .monday import MondayConnector
 from .mcp_bridge import MCPBridge
+from .salesforce import SalesforceConnector
+from .google_workspace import GoogleWorkspaceConnector
+from .microsoft365 import Microsoft365Connector
+from .meta_business import MetaBusinessConnector
+from .amazon_business import AmazonBusinessConnector
 
 __all__ = [
     "Connector",
@@ -41,4 +46,9 @@ __all__ = [
     "AWSConnector",
     "MondayConnector",
     "MCPBridge",
+    "SalesforceConnector",
+    "GoogleWorkspaceConnector",
+    "Microsoft365Connector",
+    "MetaBusinessConnector",
+    "AmazonBusinessConnector",
 ]
