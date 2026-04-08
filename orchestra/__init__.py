@@ -62,25 +62,38 @@ except Exception:
     SalesforceConnector = GoogleWorkspaceConnector = Microsoft365Connector = None  # type: ignore
     MetaBusinessConnector = AmazonBusinessConnector = None  # type: ignore
 
-# ── Multi-orchestrator teams ───────────────────────────────────────────
+# ── Multi-orchestrator teams + fleet + mesh ─────────────────────────────
 try:
-    from .teams import OrchestraTeam, TeamConfig, ContextBus, TeamMemory, InterAgentTrust
+    from .teams import (
+        OrchestraTeam, TeamConfig, ContextBus, TeamMemory, InterAgentTrust,
+        OrchestraFleet, FleetConfig,
+        AgentNegotiator, TaskBid, NegotiationResult,
+        OrchestratorMesh, MeshNode, MeshConfig,
+    )
     from .teams.pre_built_teams import (
         enterprise_connect_team, coding_team, research_team, sales_team
     )
 except Exception:
     OrchestraTeam = TeamConfig = ContextBus = TeamMemory = InterAgentTrust = None  # type: ignore
+    OrchestraFleet = FleetConfig = AgentNegotiator = TaskBid = NegotiationResult = None  # type: ignore
+    OrchestratorMesh = MeshNode = MeshConfig = None  # type: ignore
     enterprise_connect_team = coding_team = research_team = sales_team = None  # type: ignore
 
-# ── Beyond NemoClaw security guardian ───────────────────────────────
+# ── Security guardian (full stack) ────────────────────────────────────
 try:
     from .guardian import (
         InferenceGateway, PolicyEngine,
         CapabilityLattice, AuditLedger, BeyondGuardrails,
     )
+    from .guardian.code_guard import CodeGuard, CodeThreat, CodeScanResult
+    from .guardian.ingestion_gate import IngestionGate, IngestionViolation, IngestionReport
+    from .guardian.security_config import SecurityConfig, SECURITY_CONFIG
 except Exception:
     InferenceGateway = PolicyEngine = CapabilityLattice = None  # type: ignore
     AuditLedger = BeyondGuardrails = None  # type: ignore
+    CodeGuard = CodeThreat = CodeScanResult = None  # type: ignore
+    IngestionGate = IngestionViolation = IngestionReport = None  # type: ignore
+    SecurityConfig = SECURITY_CONFIG = None  # type: ignore
 
 # Gemma 4 provider (lazy — only if available)
 try:

@@ -34,7 +34,18 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing
+# ── Guardian: every code execution passes through security ─────────────────
+try:
+    from .guardian.code_guard import CodeGuard as _CodeGuard
+    from .guardian.audit_ledger import AuditLedger as _AuditLedger
+    _GUARD = _CodeGuard()
+    _LEDGER = _AuditLedger()
+    _GUARDIAN_ACTIVE = True
+except Exception:
+    _GUARD = _LEDGER = None  # type: ignore
+    _GUARDIAN_ACTIVE = False
+ import Any
 
 __all__ = [
     "SandboxManager",
@@ -127,7 +138,28 @@ class Sandbox:
         language: str = "python",
         timeout: int | None = None,
     ) -> ExecResult:
-        """Write code to a temp file and execute it."""
+        """Write code to a temp file and execute it.
+
+        Every execution is screened by CodeGuard before running.
+        """
+        # ── Security gate: scan code before execution ──────────────────────
+        if _GUARDIAN_ACTIVE and _GUARD is not None:
+            import asyncio as _asyncio
+            _scan = _asyncio.run(_GUARD.scan(code, language, agent_id or "sandbox"))
+            if _scan.blocked:
+                from .sandbox import ExecResult
+                return ExecResult(
+                    exit_code=1,
+                    stdout="",
+                    stderr=f"[SECURITY BLOCKED] CodeGuard detected threats: {[t.value for t in _scan.threats]}",
+                    duration=0.0,
+                )
+            if _LEDGER is not None:
+                _asyncio.run(_LEDGER.record(
+                    agent_id or "sandbox", "code_execution",
+                    language, "execute", "allow",
+                    {"code_hash": _scan.code_hash, "threats": []}
+                ))
         ext = {"python": ".py", "javascript": ".js", "bash": ".sh", "typescript": ".ts"}.get(language, ".py")
         filename = f"_run_{uuid.uuid4().hex[:6]}{ext}"
         filepath = self.workspace / filename

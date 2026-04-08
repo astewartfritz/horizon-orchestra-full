@@ -35,6 +35,17 @@ except Exception:
     _PARSING_AVAILABLE = False
     _json_healer = _tool_fixer = _hall_scrub = None  # type: ignore
 
+# ── AuditLedger: record every inference + tool call ─────────────────────────
+try:
+    from .guardian.audit_ledger import AuditLedger as _AuditLedgerCls
+    from .guardian.beyond_guardrails import BeyondGuardrails as _BGCls
+    _AUDIT_LEDGER = _AuditLedgerCls()
+    _BEYOND_GUARDRAILS = _BGCls()
+    _AUDIT_ACTIVE = True
+except Exception:
+    _AUDIT_LEDGER = _BEYOND_GUARDRAILS = None  # type: ignore
+    _AUDIT_ACTIVE = False
+
 # ── Resilience integration (lazy) ────────────────────────────────────────────
 try:
     from .resilience.circuit_breaker import CircuitBreaker as _CircuitBreaker

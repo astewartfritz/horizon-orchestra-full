@@ -616,6 +616,20 @@ def create_production_app(config: APIConfig | None = None) -> Any:
             started,
         )
 
+
+    # ── Guardian singletons (policy + audit for all API routes) ───────────────
+    try:
+        from ..guardian.policy_engine import PolicyEngine as _PECls
+        from ..guardian.audit_ledger import AuditLedger as _APILedger
+        from ..guardian.beyond_guardrails import BeyondGuardrails as _APIBG
+        _POLICY_ENGINE = _PECls()
+        _API_AUDIT_LEDGER = _APILedger()
+        _API_GUARDRAILS = _APIBG()
+        _API_GUARDIAN_ACTIVE = True
+    except Exception:
+        _POLICY_ENGINE = _API_AUDIT_LEDGER = _API_GUARDRAILS = None  # type: ignore
+        _API_GUARDIAN_ACTIVE = False
+
     @app.get(f"/{config.api_version}/auth/me")
     async def get_me(
         request: Request,

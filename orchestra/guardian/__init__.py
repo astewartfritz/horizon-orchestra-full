@@ -57,6 +57,13 @@ from orchestra.guardian.capability_lattice import CapabilityLattice
 from orchestra.guardian.audit_ledger import AuditLedger
 from orchestra.guardian.beyond_guardrails import BeyondGuardrails
 from orchestra.guardian.threat_intelligence import ThreatIntelligence
+from orchestra.guardian.security_config import SecurityConfig, SECURITY_CONFIG
+from orchestra.guardian.code_guard import CodeGuard, CodeThreat, CodeScanResult
+from orchestra.guardian.ingestion_gate import (
+    IngestionGate,
+    IngestionViolation,
+    IngestionReport,
+)
 
 __all__ = [
     "InferenceGateway",
@@ -65,4 +72,12 @@ __all__ = [
     "AuditLedger",
     "BeyondGuardrails",
     "ThreatIntelligence",
+    "SecurityConfig",
+    "SECURITY_CONFIG",
+    "CodeGuard",
+    "CodeThreat",
+    "CodeScanResult",
+    "IngestionGate",
+    "IngestionViolation",
+    "IngestionReport",
 ]

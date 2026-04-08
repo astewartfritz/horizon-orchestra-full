@@ -19,6 +19,17 @@ Usage::
 """
 
 from __future__ import annotations
+# ── IngestionGate: scan every AI-generated file before writing ─────────────
+try:
+    from ..guardian.ingestion_gate import IngestionGate as _IngestionGateCls
+    from ..guardian.audit_ledger import AuditLedger as _EditorLedger
+    _INGESTION_GATE = _IngestionGateCls()
+    _EDITOR_LEDGER = _EditorLedger()
+    _GATE_ACTIVE = True
+except Exception:
+    _INGESTION_GATE = _EDITOR_LEDGER = None  # type: ignore
+    _GATE_ACTIVE = False
+
 
 import difflib
 import logging
@@ -325,7 +336,22 @@ class CodeEditor:
                 error=str(exc),
             )
 
-    def create_file(self, path: str, content: str) -> EditResult:
+    def create_file(self, path: str, content: str,
+                     agent_id: str = "codebase-agent") -> EditResult:
+        # ── IngestionGate scan before creating file ────────────────────────
+        if _GATE_ACTIVE and _INGESTION_GATE is not None:
+            try:
+                import asyncio as _cig
+                _report = _cig.run(_INGESTION_GATE.check(content, path, agent_id))
+                if not _report.approved:
+                    import logging as _log
+                    _log.getLogger("orchestra.codebase.editor").error(
+                        "[SECURITY] IngestionGate BLOCKED create of %s — violations: %s",
+                        path, [str(v) for v in getattr(_report, 'blocking_violations', [])]
+                    )
+                    return EditResult(success=False, ops_applied=0, errors=[f"IngestionGate blocked: security violations detected in {path}"])
+            except Exception:
+                pass  # Gate unavailable — allow but log
         """Create a new file with the given content.
 
         Parent directories are created automatically. If the file already

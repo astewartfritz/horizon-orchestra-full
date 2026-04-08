@@ -47,6 +47,9 @@ from .team import (
 from .context_bus import ContextBus, ContextMessage
 from .team_memory import TeamMemory, MemoryEntry
 from .inter_agent_trust import InterAgentTrust, TrustLevel
+from .fleet import OrchestraFleet, FleetConfig, FleetBus, FleetCircuitBreaker, FleetMemory
+from .negotiator import AgentNegotiator, TaskBid, NegotiationResult
+from .orchestrator_mesh import OrchestratorMesh, MeshNode, MeshConfig
 
 __all__ = [
     # team.py
@@ -64,4 +67,18 @@ __all__ = [
     # inter_agent_trust.py
     "InterAgentTrust",
     "TrustLevel",
+    # fleet.py
+    "OrchestraFleet",
+    "FleetConfig",
+    "FleetBus",
+    "FleetCircuitBreaker",
+    "FleetMemory",
+    # negotiator.py
+    "AgentNegotiator",
+    "TaskBid",
+    "NegotiationResult",
+    # orchestrator_mesh.py
+    "OrchestratorMesh",
+    "MeshNode",
+    "MeshConfig",
 ]
