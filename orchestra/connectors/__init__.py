@@ -27,6 +27,8 @@ from .google_workspace import GoogleWorkspaceConnector
 from .microsoft365 import Microsoft365Connector
 from .meta_business import MetaBusinessConnector
 from .amazon_business import AmazonBusinessConnector
+from .zapier import ZapierConnector
+from .n8n import N8nConnector
 
 __all__ = [
     "Connector",
@@ -51,4 +53,6 @@ __all__ = [
     "Microsoft365Connector",
     "MetaBusinessConnector",
     "AmazonBusinessConnector",
+    "ZapierConnector",
+    "N8nConnector",
 ]
