@@ -1,0 +1,81 @@
+/* =============================================================
+   Orchestra — Responsive (mobile / tablet)
+   ============================================================= */
+
+/* Tablet */
+@media (max-width: 1100px) {
+  :root {
+    --rightpanel-w: 300px;
+  }
+  .split { grid-template-columns: 1fr; }
+  .split__side { display: none; }
+  .grid--4 { grid-template-columns: repeat(2, 1fr); }
+  .grid--3 { grid-template-columns: repeat(2, 1fr); }
+  .page__inner { padding: var(--s-6) var(--s-5) var(--s-10); }
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+  .app {
+    grid-template-columns: 0 1fr;
+  }
+  .app.mobile-open {
+    grid-template-columns: var(--sidebar-w) 1fr;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--sidebar-w);
+    transform: translateX(-100%);
+    transition: transform 280ms var(--ease);
+    z-index: 60;
+    box-shadow: var(--shadow-lg);
+  }
+  .app.mobile-open .sidebar {
+    transform: translateX(0);
+  }
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 9, 14, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 55;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur) var(--ease);
+  }
+  .app.mobile-open .mobile-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .topbar { padding: 0 var(--s-3); gap: var(--s-2); }
+  .topbar__search { display: none; }
+  .topbar__crumbs .sep,
+  .topbar__crumbs .parent { display: none; }
+
+  .grid--4 { grid-template-columns: 1fr; }
+  .grid--3 { grid-template-columns: 1fr; }
+  .grid--2 { grid-template-columns: 1fr; }
+
+  .page__inner { padding: var(--s-5) var(--s-4) var(--s-10); }
+
+  .chat__welcome h1 { font-size: 26px; }
+  .chat__welcome-grid { grid-template-columns: 1fr; }
+
+  .composer { padding: 0 var(--s-3) var(--s-4); }
+  .chat__stream-inner { padding: 0 var(--s-3); }
+
+  .detail-panel { width: 100%; }
+}
+
+.mobile-toggle { display: none; }
+@media (max-width: 720px) {
+  .mobile-toggle { display: inline-flex; }
+}
+
+/* Large screens */
+@media (min-width: 1600px) {
+  .page__inner { max-width: 1360px; }
+}
