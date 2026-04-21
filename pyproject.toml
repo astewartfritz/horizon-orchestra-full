@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=72", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "horizon-orchestra"
@@ -36,6 +36,7 @@ speech = [
     "deepgram-sdk>=3.0.0",
 ]
 yaml = ["pyyaml>=6.0"]
+redis = ["redis>=5.0.0"]
 server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.34.0"]
 all = [
     "google-genai>=1.0.0",
@@ -44,6 +45,7 @@ all = [
     "playwright>=1.50.0",
     "faster-whisper>=1.0.0",
     "pyyaml>=6.0",
+    "redis>=5.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
 ]

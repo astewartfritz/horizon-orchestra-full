@@ -207,6 +207,21 @@ try:
 except ImportError:
     pass
 
+# ── Rate-Limit Middleware ────────────────────────────────────────────────────
+try:
+    from .middleware import (
+        RateLimitMiddleware,
+        RateLimitDecision,
+        RateLimitOptions,
+        OrchestraMiddleware,
+        AuditSink,
+        CircuitBreaker,
+        BreakerState,
+        LocalTokenBucket,
+    )
+except ImportError:
+    pass
+
 # ── Citation ─────────────────────────────────────────────────────────────────
 try:
     from .citation import (
@@ -277,6 +292,10 @@ __all__ = [
     # citation
     "CitationTracker", "CitationMiddleware", "CitationEnforcer",
     "GroundedResponse", "Source", "Citation", "auto_ground",
+    # rate-limit middleware
+    "RateLimitMiddleware", "RateLimitDecision", "RateLimitOptions",
+    "OrchestraMiddleware", "AuditSink", "CircuitBreaker", "BreakerState",
+    "LocalTokenBucket",
 ]
 
 __version__ = "0.3.0"

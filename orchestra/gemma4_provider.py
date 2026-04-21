@@ -636,7 +636,8 @@ def generate_vllm_command(
         "e2b": "# Requires: 1x RTX 3060 8GB+ (bf16) or CPU-only (Q4)",
     }
 
-    return f"{gpu_note.get(variant, '')}\n{' \\\\\n    '.join(cmd_parts)}"
+    _sep = " \\\n    "
+    return f"{gpu_note.get(variant, '')}\n{_sep.join(cmd_parts)}"
 
 
 def generate_docker_service(
