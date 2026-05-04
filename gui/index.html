@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Orchestra — AI Orchestration Platform</title>
+  <meta name="description" content="Orchestra coordinates AI agents across your enterprise. Built for real-time task execution, auditable decisions, and multi-agent workflows." />
+  <meta name="theme-color" content="#09090E" />
+
+  <!-- Favicon: Orchestra mark -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='32' y2='32' gradientUnits='userSpaceOnUse'><stop stop-color='%238282F7'/><stop offset='1' stop-color='%2300C9B8'/></linearGradient></defs><path d='M6 23C6 14 11 8 18 8c4 0 7 2 8 5' stroke='url(%23g)' stroke-width='2.5' fill='none' stroke-linecap='round'/><circle cx='18' cy='22' r='3.2' fill='url(%23g)'/><circle cx='26' cy='13' r='1.8' fill='%2300C9B8'/></svg>" />
+
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar"></aside>
+    <header class="topbar"></header>
+    <main class="main">
+      <div class="page-root" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
+    </main>
+  </div>
+
+  <!-- Load order matters: data + icons first, then components, then pages, then app -->
+  <script src="assets/icons.js"></script>
+  <script src="js/data/mock.js"></script>
+
+  <script src="js/components/codediff.js"></script>
+  <script src="js/components/terminal.js"></script>
+  <script src="js/components/checklist.js"></script>
+  <script src="js/components/message.js"></script>
+  <script src="js/components/cards.js"></script>
+  <script src="js/components/sidebar.js"></script>
+  <script src="js/components/topbar.js"></script>
+
+  <script src="js/pages/home.js"></script>
+  <script src="js/pages/chat.js"></script>
+  <script src="js/pages/agents.js"></script>
+  <script src="js/pages/tasks.js"></script>
+  <script src="js/pages/settings.js"></script>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

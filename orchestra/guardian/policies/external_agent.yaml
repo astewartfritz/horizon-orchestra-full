@@ -1,0 +1,88 @@
+# External Agent Policy
+# Applies to agents matching "external-*".  Heavily restricted
+# for cross-organisation or untrusted agents.  Read-only access
+# with minimal model permissions and no write capabilities.
+---
+policy_id: "external-agent"
+version: 1
+default_action: deny
+agent_pattern: "external-*"
+description: "Heavily restricted policy for external/cross-org agents.  Read-only with minimal model access."
+enabled: true
+tags:
+  - external
+  - restricted
+  - security
+
+rules:
+  # Network: limited inference only
+  - resource: network
+    action: outbound
+    destinations:
+      - "*.googleapis.com"
+    effect: allow
+    description: "Allow only Google API inference (cheapest models)"
+
+  # Filesystem: read-only, shared workspace only
+  - resource: filesystem
+    action: read
+    paths:
+      - "/workspace/shared/*"
+    effect: allow
+    description: "Read-only access to shared workspace"
+
+  # Filesystem: block ALL writes
+  - resource: filesystem
+    action: write
+    effect: deny
+    description: "No filesystem write access"
+
+  # Models: small/efficient only
+  - resource: model
+    action: "*"
+    allowed_models:
+      - "gemma-4-12b"
+      - "gemma-4-e4b"
+      - "gemma-4-e2b"
+    effect: allow
+    description: "Small models only (cost + security control)"
+
+  # Tools: minimal read-only
+  - resource: tool
+    action: call
+    tools:
+      - "search"
+      - "read_file"
+    effect: allow
+    description: "Read-only tools only"
+
+  # Memory: read-only
+  - resource: memory
+    action: read
+    effect: allow
+    description: "Read-only memory access"
+
+  # Memory: block writes
+  - resource: memory
+    action: write
+    effect: deny
+    description: "No memory writes"
+
+  # Connectors: none
+  - resource: connector
+    action: "*"
+    effect: deny
+    description: "No connector access"
+
+  # Agent: no cross-agent operations
+  - resource: agent
+    action: "*"
+    effect: deny
+    description: "No agent spawn/handoff/broadcast"
+
+  # Everything else: log for analysis
+  - resource: "*"
+    action: "*"
+    effect: deny
+    log: true
+    description: "Catch-all deny with logging"

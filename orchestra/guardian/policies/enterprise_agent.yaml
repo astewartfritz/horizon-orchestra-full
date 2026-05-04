@@ -1,0 +1,141 @@
+# Enterprise Agent Policy
+# Applies to agents matching "enterprise-*".  Extends standard
+# permissions with enterprise connectors, larger models, and
+# broader network access to SaaS endpoints.
+---
+policy_id: "enterprise-agent"
+version: 1
+default_action: deny
+agent_pattern: "enterprise-*"
+description: "Enterprise agent policy.  Grants SaaS connector access, large models, and broader tool permissions."
+enabled: true
+tags:
+  - enterprise
+  - internal
+
+rules:
+  # Network: inference endpoints
+  - resource: network
+    action: outbound
+    destinations:
+      - "*.moonshot.ai"
+      - "*.openrouter.ai"
+      - "*.together.xyz"
+      - "*.perplexity.ai"
+      - "*.googleapis.com"
+      - "*.openai.com"
+      - "*.anthropic.com"
+    effect: allow
+    description: "Allow inference provider endpoints"
+
+  # Network: enterprise SaaS endpoints
+  - resource: network
+    action: outbound
+    destinations:
+      - "*.salesforce.com"
+      - "*.force.com"
+      - "login.salesforce.com"
+      - "*.google.com"
+      - "*.googleapis.com"
+      - "*.microsoft.com"
+      - "graph.microsoft.com"
+      - "login.microsoftonline.com"
+      - "*.slack.com"
+      - "*.notion.so"
+    effect: allow
+    description: "Allow enterprise SaaS endpoints"
+
+  # Network: deny all other outbound
+  - resource: network
+    action: outbound
+    effect: deny
+    description: "Block unregistered outbound traffic"
+
+  # Filesystem: full workspace access
+  - resource: filesystem
+    action: read
+    paths:
+      - "/workspace/*"
+      - "/tmp/*"
+    effect: allow
+    description: "Allow workspace and tmp reads"
+
+  - resource: filesystem
+    action: write
+    paths:
+      - "/workspace/*"
+      - "/tmp/*"
+    effect: allow
+    description: "Allow workspace and tmp writes"
+
+  # Models: standard + large + multimodal
+  - resource: model
+    action: "*"
+    allowed_models:
+      - "kimi-k2.5"
+      - "kimi-k2.5-openrouter"
+      - "gemma-4-31b"
+      - "gemma-4-26b-moe"
+      - "gemma-4-12b"
+      - "sonar"
+      - "sonar-pro"
+      - "sonar-reasoning-pro"
+      - "gpt-5.4"
+      - "claude-opus-4.6"
+    effect: allow
+    description: "Enterprise model tier (includes frontier models)"
+
+  # Tools: broad access
+  - resource: tool
+    action: call
+    tools:
+      - "search"
+      - "read_file"
+      - "write_file"
+      - "list_files"
+      - "get_record"
+      - "query_records"
+      - "create_record"
+      - "update_record"
+      - "send_email"
+      - "schedule_meeting"
+      - "post_message"
+    effect: allow
+    description: "Enterprise tool set"
+
+  # Tools: destructive still needs approval
+  - resource: tool
+    action: call
+    tools:
+      - "delete_record"
+      - "bulk_delete"
+      - "bulk_update"
+    effect: allow_with_approval
+    requires_approval: true
+    approval_timeout: 600
+    description: "Destructive tools require approval"
+
+  # Connectors: enterprise platforms
+  - resource: connector
+    action: "*"
+    connectors:
+      - "salesforce"
+      - "google"
+      - "microsoft"
+      - "slack"
+      - "notion"
+    effect: allow
+    description: "Enterprise connector access"
+
+  # Memory: full access
+  - resource: memory
+    action: read
+    effect: allow
+  - resource: memory
+    action: write
+    effect: allow
+  - resource: memory
+    action: delete
+    effect: allow_with_approval
+    requires_approval: true
+    description: "Memory deletion requires approval"

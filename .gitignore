@@ -1,5 +1,155 @@
+# ============================================================
+# Horizon Orchestra — .gitignore
+# NEVER commit secrets, keys, models, or personal data
+# ============================================================
+
+# ── Secrets & credentials (CRITICAL — never commit) ─────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+secrets/
+credentials/
+private/
+*_secret*
+*_private*
+*apikey*
+*api_key*
+*access_token*
+*refresh_token*
+
+# ── Model weights & ML artifacts ─────────────────────────────
+*.safetensors
+*.gguf
+*.ggml
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.pkl
+*.pickle
+models/
+weights/
+checkpoints/
+*.model
+
+# ── Database & user data ────────────────────────────────────
+*.sqlite3
+*.db
+*.sqlite
+*.dump
+*.sql
+/data/
+/user_data/
+/workspace/
+/memory_store/
+*.jsonl
+audit_logs/
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+
+# ── Node.js ───────────────────────────────────────────────────
+node_modules/
+sdk/dist/
+node/dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# ── Rust ─────────────────────────────────────────────────────
+rust/target/
 /target
 Cargo.lock
 
-# Local IDE / Claude metadata in this folder
+# ── Go ───────────────────────────────────────────────────────
+go/bin/
+go/pkg/
+go/envd/envd
+
+# ── Docker & cloud ───────────────────────────────────────────
+.docker/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+.terraform/
+*.tfplan
+cdk.out/
+samconfig.toml
+.aws-sam/
+
+# ── IDE & OS ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.orig
+*.bak
+
+# ── Local IDE / Claude metadata (this workspace) ─────────────
 /ide/
+
+# ── Logs & runtime ───────────────────────────────────────────
+*.log
+logs/
+*.pid
+*.seed
+*.gz
+*.zip
+*.tar
+
+# ── Browser profiles (Frontier) ───────────────────────────────
+browser_profiles/
+playwright-report/
+test-results/
+screenshots/
+
+# ── Upload staging ───────────────────────────────────────────
+uploads/
+tmp/
+temp/
+
+# ── Upstream reference repos (dev only) ──────────────────────
+claude_code_upstream/
+codex_upstream/
+dify_upstream/
+openclaw_upstream/
+chromium_depot_tools/
+repo/
+apps/
+
+# ── Benchmark outputs ────────────────────────────────────────
+benchmark_results.json
+*.benchmark
+
+# ── Jupyter ──────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Certificates & SSH ───────────────────────────────────────
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+known_hosts

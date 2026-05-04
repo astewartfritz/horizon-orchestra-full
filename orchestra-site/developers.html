@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Developers — Horizon Orchestra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-display: 'Space Grotesk', system-ui, sans-serif;
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --bg:          #0A0A0F;
+      --surface:     #111118;
+      --surface-2:   #16161F;
+      --surface-3:   #1A1A25;
+      --border:      #1E1E2A;
+      --border-2:    #2A2A3A;
+
+      --text:        #E8E8ED;
+      --text-muted:  #8888A0;
+      --text-faint:  #45455A;
+
+      --teal:        #00D4AA;
+      --teal-dim:    #00A888;
+      --teal-glow:   rgba(0, 212, 170, 0.15);
+      --teal-glow-s: rgba(0, 212, 170, 0.08);
+      --gold:        #FFB547;
+      --gold-dim:    #CC9038;
+
+      --green:       #3DD68C;
+      --red:         #FF5E7D;
+      --yellow:      #FFD460;
+      --blue:        #60A5FA;
+      --purple:      #A78BFA;
+
+      --radius-sm: 6px;
+      --radius:    10px;
+      --radius-lg: 16px;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+      color: var(--text);
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    a { color: var(--teal); text-decoration: none; }
+    a:hover { color: var(--teal-dim); text-decoration: underline; }
+
+    /* ── Navigation ──────────────────────────────────────────────── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-display);
+      font-weight: 600; font-size: 16px;
+      color: var(--text);
+    }
+    .nav-brand svg { flex-shrink: 0; }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      font-size: 13px; font-weight: 500; color: var(--text-muted);
+      text-decoration: none; letter-spacing: 0.02em;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--teal); text-decoration: none; }
+    .nav-cta {
+      background: var(--teal); color: #0A0A0F;
+      padding: 7px 18px; border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600;
+      transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--teal-dim); text-decoration: none; }
+
+    /* ── Container ───────────────────────────────────────────────── */
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Hero ────────────────────────────────────────────────────── */
+    .hero {
+      padding: 140px 0 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -120px; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, var(--teal-glow-s) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .hero h1 span { color: var(--teal); }
+    .hero p {
+      font-size: 18px; color: var(--text-muted);
+      max-width: 580px; margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      background: var(--teal); color: #0A0A0F;
+      padding: 12px 28px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 600; font-family: var(--font-body);
+      border: none; cursor: pointer; transition: all 0.2s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary:hover { background: var(--teal-dim); transform: translateY(-1px); text-decoration: none; color: #0A0A0F; }
+    .btn-secondary {
+      background: transparent; color: var(--text);
+      padding: 12px 28px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 500; font-family: var(--font-body);
+      border: 1px solid var(--border-2); cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: var(--teal); color: var(--teal); text-decoration: none; }
+
+    /* ── Section ─────────────────────────────────────────────────── */
+    section { padding: 80px 0; }
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 11px; font-weight: 500;
+      color: var(--teal); text-transform: uppercase;
+      letter-spacing: 0.15em; margin-bottom: 10px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700; margin-bottom: 16px;
+    }
+    .section-desc {
+      font-size: 16px; color: var(--text-muted);
+      max-width: 640px; margin-bottom: 48px;
+      line-height: 1.7;
+    }
+
+    /* ── Quickstart ──────────────────────────────────────────────── */
+    .quickstart { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; }
+    .step {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      position: relative;
+    }
+    .step-number {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--teal-glow); color: var(--teal);
+      font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .step h3 {
+      font-family: var(--font-display);
+      font-size: 17px; font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .step p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+
+    /* ── Code blocks ─────────────────────────────────────────────── */
+    .code-block {
+      background: #0D0D14;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      overflow-x: auto;
+      position: relative;
+      color: var(--text-muted);
+    }
+    .code-block .copy-btn {
+      position: absolute; top: 8px; right: 8px;
+      background: var(--surface-3); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 11px; font-family: var(--font-mono);
+      padding: 4px 10px; border-radius: var(--radius-sm);
+      cursor: pointer; opacity: 0; transition: opacity 0.2s;
+    }
+    .code-block:hover .copy-btn { opacity: 1; }
+    .code-block .copy-btn:hover { color: var(--teal); border-color: var(--teal); }
+
+    /* Syntax highlighting */
+    .kw { color: #C792EA; }
+    .fn { color: #82AAFF; }
+    .str { color: #C3E88D; }
+    .cm { color: #546E7A; }
+    .num { color: #F78C6C; }
+    .op { color: #89DDFF; }
+    .type { color: #FFCB6B; }
+    .var { color: #F07178; }
+
+    /* ── Code tabs ───────────────────────────────────────────────── */
+    .code-tabs { margin-top: 0; }
+    .tab-bar {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-muted); font-family: var(--font-mono);
+      font-size: 12px; padding: 10px 18px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .tab-panel .code-block { border-top-left-radius: 0; border-top-right-radius: 0; border-top: none; }
+
+    /* ── Card grid ───────────────────────────────────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: var(--teal); transform: translateY(-2px); }
+    .card-icon {
+      width: 40px; height: 40px; border-radius: var(--radius);
+      background: var(--teal-glow);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+    .card-icon svg { width: 20px; height: 20px; color: var(--teal); }
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 16px; font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+    .card .tag {
+      display: inline-block; margin-top: 12px;
+      font-family: var(--font-mono); font-size: 11px;
+      color: var(--teal); background: var(--teal-glow);
+      padding: 3px 10px; border-radius: 99px;
+    }
+
+    /* ── SDK grid ────────────────────────────────────────────────── */
+    .sdk-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .sdk-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .sdk-card h4 {
+      font-family: var(--font-display);
+      font-size: 15px; font-weight: 600;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sdk-card .install {
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--teal); background: var(--teal-glow);
+      padding: 6px 12px; border-radius: var(--radius-sm);
+      margin-top: 10px; display: inline-block;
+    }
+    .sdk-card p { font-size: 13px; color: var(--text-muted); }
+
+    /* ── Rate limits table ───────────────────────────────────────── */
+    .limits-table {
+      width: 100%; border-collapse: collapse;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .limits-table th {
+      background: var(--surface-3);
+      font-family: var(--font-display);
+      font-size: 13px; font-weight: 600;
+      text-align: left; padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .limits-table td {
+      padding: 12px 20px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .limits-table tr:last-child td { border-bottom: none; }
+    .limits-table .plan-name {
+      font-weight: 600; color: var(--text);
+      font-family: var(--font-display);
+    }
+    .limits-table .highlight td { background: var(--teal-glow-s); }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 0;
+      text-align: center;
+      font-size: 13px; color: var(--text-faint);
+    }
+    .footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 16px; }
+    .footer-links a { color: var(--text-muted); font-size: 13px; }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav { padding: 0 16px; }
+      .nav-links { display: none; }
+      .container { padding: 0 16px; }
+      section { padding: 56px 0; }
+      .hero { padding: 100px 0 56px; }
+      .card-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .limits-table { font-size: 12px; }
+      .limits-table th, .limits-table td { padding: 10px 12px; }
+    }
+
+    /* ── Status badge ────────────────────────────────────────────── */
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(61, 214, 140, 0.1);
+      border: 1px solid rgba(61, 214, 140, 0.2);
+      color: var(--green); font-size: 12px; font-weight: 500;
+      padding: 6px 14px; border-radius: 99px;
+      font-family: var(--font-mono);
+    }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Support cards ───────────────────────────────────────────── */
+    .support-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .support-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+    .support-card:hover { border-color: var(--teal); }
+    .support-card h4 {
+      font-family: var(--font-display);
+      font-size: 15px; font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .support-card p { font-size: 13px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ──────────────────────────────────────────────────── -->
+<nav class="nav">
+  <a href="#" class="nav-brand">
+    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#00D4AA" fill-opacity="0.12"/>
+      <path d="M16 6L26 12V20L16 26L6 20V12L16 6Z" stroke="#00D4AA" stroke-width="1.5" fill="none"/>
+      <circle cx="16" cy="16" r="3" fill="#00D4AA"/>
+      <line x1="16" y1="6" x2="16" y2="13" stroke="#00D4AA" stroke-width="1" opacity="0.5"/>
+      <line x1="16" y1="19" x2="16" y2="26" stroke="#00D4AA" stroke-width="1" opacity="0.5"/>
+      <line x1="6" y1="12" x2="13" y2="16" stroke="#00D4AA" stroke-width="1" opacity="0.5"/>
+      <line x1="19" y1="16" x2="26" y2="12" stroke="#00D4AA" stroke-width="1" opacity="0.5"/>
+    </svg>
+    Horizon Orchestra
+  </a>
+  <div class="nav-links">
+    <a href="#">Platform</a>
+    <a href="#">Pricing</a>
+    <a href="#" class="active">Developers</a>
+    <a href="#">Enterprise</a>
+    <a href="#">Docs</a>
+    <a href="#">Status</a>
+  </div>
+  <a href="#quickstart" class="nav-cta">Get API Key</a>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="section-label">Developer Platform</div>
+    <h1>Build with <span>Horizon Orchestra</span></h1>
+    <p>One API to deploy autonomous agents, orchestrate multi-model teams, and ship AI-native products. From first API call to production fleet in minutes.</p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Get Started Free
+      </a>
+      <a href="#api-reference" class="btn-secondary">API Reference</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Quickstart ───────────────────────────────────────────────────── -->
+<section class="quickstart" id="quickstart">
+  <div class="container">
+    <div class="section-label">Quickstart</div>
+    <div class="section-title">Three steps to your first agent</div>
+    <div class="section-desc">Get from zero to running agents in under two minutes.</div>
+
+    <div class="steps">
+      <!-- Step 1 -->
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Install the SDK</h3>
+        <p>Choose your language and install the Orchestra client.</p>
+        <div class="code-tabs" data-tabs="install">
+          <div class="tab-bar">
+            <button class="tab-btn active" data-tab="python">Python</button>
+            <button class="tab-btn" data-tab="typescript">TypeScript</button>
+            <button class="tab-btn" data-tab="curl">cURL</button>
+          </div>
+          <div class="tab-panel active" data-tab="python">
+            <div class="code-block">pip install horizon-orchestra<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          </div>
+          <div class="tab-panel" data-tab="typescript">
+            <div class="code-block">npm install @horizon-orchestra/sdk<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          </div>
+          <div class="tab-panel" data-tab="curl">
+            <div class="code-block"><span class="cm"># No installation needed — use the REST API directly</span>
+curl https://api.orchestra.dev/v1/health<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Set your API key</h3>
+        <p>Grab your key from the dashboard and export it.</p>
+        <div class="code-block"><span class="kw">export</span> ORCHESTRA_API_KEY=<span class="str">"orch_sk_..."</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>Run your first agent</h3>
+        <p>One call to launch an autonomous agent that thinks, acts, and delivers.</p>
+        <div class="code-tabs" data-tabs="first-agent">
+          <div class="tab-bar">
+            <button class="tab-btn active" data-tab="python">Python</button>
+            <button class="tab-btn" data-tab="typescript">TypeScript</button>
+            <button class="tab-btn" data-tab="curl">cURL</button>
+          </div>
+          <div class="tab-panel active" data-tab="python">
+            <div class="code-block"><span class="kw">from</span> orchestra <span class="kw">import</span> Orchestra
+
+client = Orchestra()
+result = <span class="kw">await</span> client.<span class="fn">run</span>(
+    <span class="str">"Analyse Q3 revenue and create a summary report"</span>
+)
+<span class="fn">print</span>(result.output)<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          </div>
+          <div class="tab-panel" data-tab="typescript">
+            <div class="code-block"><span class="kw">import</span> { Orchestra } <span class="kw">from</span> <span class="str">'@horizon-orchestra/sdk'</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="type">Orchestra</span>();
+<span class="kw">const</span> result = <span class="kw">await</span> client.<span class="fn">run</span>(
+  <span class="str">"Analyse Q3 revenue and create a summary report"</span>
+);
+console.<span class="fn">log</span>(result.output);<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          </div>
+          <div class="tab-panel" data-tab="curl">
+            <div class="code-block">curl -X POST https://api.orchestra.dev/v1/tasks \
+  -H <span class="str">"Authorization: Bearer $ORCHESTRA_API_KEY"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"task": "Analyse Q3 revenue and create a summary report"}'</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── API Reference ───────────────────────────────────────────────── -->
+<section id="api-reference">
+  <div class="container">
+    <div class="section-label">API Reference</div>
+    <div class="section-title">Everything you need to build</div>
+    <div class="section-desc">RESTful endpoints, streaming support, and full OpenAPI spec. Every endpoint returns JSON with consistent error shapes.</div>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 3v5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Authentication</h3>
+        <p>API key auth via Bearer token. Supports org-level keys, user-scoped tokens, and short-lived session keys with configurable TTL.</p>
+        <span class="tag">POST /v1/auth/token</span>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M3 10h14M10 3v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Run Task</h3>
+        <p>Submit a task to an autonomous agent. Supports model selection, architecture routing, tool restrictions, and budget caps.</p>
+        <span class="tag">POST /v1/tasks</span>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M4 4h12M4 8h8M4 12h10M4 16h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Stream</h3>
+        <p>Server-Sent Events for real-time token streaming. Receive thinking, tool calls, and final output as they happen.</p>
+        <span class="tag">GET /v1/tasks/{id}/stream</span>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 20 20" fill="none"><circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="13" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M9.5 9.5l1 1" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <h3>Teams</h3>
+        <p>Create multi-agent teams with specialised roles. Configure team size, negotiation strategy, and consensus rules.</p>
+        <span class="tag">POST /v1/teams</span>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="12" y="3" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="12" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="12" y="12" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <h3>Fleet</h3>
+        <p>Deploy and manage an agent fleet. Auto-scaling, load balancing, priority queues, and global distribution across regions.</p>
+        <span class="tag">POST /v1/fleet/deploy</span>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l7-4 7 4v10l-7 4-7-4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Webhooks</h3>
+        <p>Real-time event delivery with HMAC-SHA256 signing. At-least-once guarantees, exponential backoff, and dead-letter queues.</p>
+        <span class="tag">POST /v1/webhooks</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SDKs ─────────────────────────────────────────────────────────── -->
+<section id="sdks" style="background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="container">
+    <div class="section-label">SDKs &amp; Libraries</div>
+    <div class="section-title">Your language, your way</div>
+    <div class="section-desc">Official SDKs with type safety, streaming support, and automatic retries built in.</div>
+
+    <div class="sdk-grid">
+      <div class="sdk-card">
+        <h4>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="#3776AB" stroke-width="1.5"/><text x="9" y="13" text-anchor="middle" fill="#3776AB" font-size="10" font-weight="bold">Py</text></svg>
+          Python
+        </h4>
+        <p>Async-native, type-hinted, Python 3.10+</p>
+        <span class="install">pip install horizon-orchestra</span>
+      </div>
+      <div class="sdk-card">
+        <h4>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="16" height="16" rx="3" stroke="#3178C6" stroke-width="1.5"/><text x="9" y="13" text-anchor="middle" fill="#3178C6" font-size="9" font-weight="bold">TS</text></svg>
+          TypeScript
+        </h4>
+        <p>Full type definitions, ESM + CJS, Node 18+</p>
+        <span class="install">npm i @horizon-orchestra/sdk</span>
+      </div>
+      <div class="sdk-card">
+        <h4>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="8" stroke="#00ADD8" stroke-width="1.5"/><text x="9" y="13" text-anchor="middle" fill="#00ADD8" font-size="9" font-weight="bold">Go</text></svg>
+          Go
+        </h4>
+        <p>Idiomatic Go with context support, Go 1.21+</p>
+        <span class="install">go get orchestra.dev/sdk</span>
+      </div>
+      <div class="sdk-card">
+        <h4>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="16" height="16" rx="2" stroke="var(--teal)" stroke-width="1.5"/><text x="9" y="13" text-anchor="middle" fill="var(--teal)" font-size="8" font-weight="bold">API</text></svg>
+          REST / cURL
+        </h4>
+        <p>Direct HTTP — no SDK needed</p>
+        <span class="install">api.orchestra.dev/v1</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Code Examples ────────────────────────────────────────────────── -->
+<section id="examples">
+  <div class="container">
+    <div class="section-label">Code Examples</div>
+    <div class="section-title">From simple tasks to enterprise fleets</div>
+    <div class="section-desc">Copy-paste examples for common patterns. Each example is production-ready.</div>
+
+    <div class="code-tabs" data-tabs="examples">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="basic">Basic Agent</button>
+        <button class="tab-btn" data-tab="rag">RAG Pipeline</button>
+        <button class="tab-btn" data-tab="swarm">Agent Swarm</button>
+        <button class="tab-btn" data-tab="team">Enterprise Team</button>
+        <button class="tab-btn" data-tab="webhook">Webhook Setup</button>
+      </div>
+
+      <div class="tab-panel active" data-tab="basic">
+        <div class="code-block"><span class="cm"># Basic autonomous agent</span>
+<span class="kw">from</span> orchestra <span class="kw">import</span> AgentLoop, ModelRouter, AgentConfig, create_default_tools
+
+router = <span class="type">ModelRouter</span>()
+tools  = <span class="fn">create_default_tools</span>(router)
+config = <span class="type">AgentConfig</span>(model=<span class="str">"kimi-k2.5"</span>, max_steps=<span class="num">20</span>)
+agent  = <span class="type">AgentLoop</span>(router, tools, config)
+
+<span class="kw">async for</span> event <span class="kw">in</span> agent.<span class="fn">run</span>(<span class="str">"Research competitive landscape for AI code editors"</span>):
+    <span class="fn">print</span>(event)<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" data-tab="rag">
+        <div class="code-block"><span class="cm"># RAG pipeline with vector search</span>
+<span class="kw">from</span> orchestra <span class="kw">import</span> RAGPipeline, RAGConfig
+
+config = <span class="type">RAGConfig</span>(
+    embedding_model=<span class="str">"text-embedding-3-large"</span>,
+    chunk_size=<span class="num">512</span>,
+    retrieval_top_k=<span class="num">8</span>,
+    rerank=<span class="kw">True</span>,
+)
+rag = <span class="type">RAGPipeline</span>(config)
+
+<span class="cm"># Index documents</span>
+<span class="kw">await</span> rag.<span class="fn">index_directory</span>(<span class="str">"/docs"</span>)
+
+<span class="cm"># Query with citations</span>
+answer = <span class="kw">await</span> rag.<span class="fn">query</span>(<span class="str">"What is our refund policy?"</span>)
+<span class="fn">print</span>(answer.text, answer.citations)<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" data-tab="swarm">
+        <div class="code-block"><span class="cm"># Parallel agent swarm</span>
+<span class="kw">from</span> orchestra <span class="kw">import</span> SwarmCoordinator, SubTask
+
+coordinator = <span class="type">SwarmCoordinator</span>(max_parallel=<span class="num">5</span>)
+
+tasks = [
+    <span class="type">SubTask</span>(<span class="str">"Research competitor A pricing"</span>),
+    <span class="type">SubTask</span>(<span class="str">"Research competitor B features"</span>),
+    <span class="type">SubTask</span>(<span class="str">"Analyse market trends 2024-2025"</span>),
+    <span class="type">SubTask</span>(<span class="str">"Generate competitive matrix"</span>),
+]
+
+result = <span class="kw">await</span> coordinator.<span class="fn">execute</span>(tasks)
+<span class="kw">for</span> r <span class="kw">in</span> result.outputs:
+    <span class="fn">print</span>(r.task, r.output[:100])<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" data-tab="team">
+        <div class="code-block"><span class="cm"># Enterprise agent team with roles</span>
+<span class="kw">from</span> orchestra.teams <span class="kw">import</span> OrchestraTeam, TeamConfig
+<span class="kw">from</span> orchestra.teams.pre_built_teams <span class="kw">import</span> research_team
+
+team = <span class="fn">research_team</span>(
+    name=<span class="str">"Market Intelligence"</span>,
+    size=<span class="num">4</span>,
+    budget_usd=<span class="num">5.00</span>,
+)
+
+result = <span class="kw">await</span> team.<span class="fn">run</span>(
+    <span class="str">"Comprehensive analysis of the enterprise AI platform market, "</span>
+    <span class="str">"including TAM, key players, and growth projections through 2027"</span>
+)
+<span class="fn">print</span>(result.summary)
+<span class="fn">print</span>(f<span class="str">"Cost: ${result.total_cost:.2f} | Agents: {result.agents_used}"</span>)<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" data-tab="webhook">
+        <div class="code-block"><span class="cm"># Webhook signature verification</span>
+<span class="kw">from</span> orchestra.webhooks <span class="kw">import</span> WebhookDeliveryEngine, WebhookEvent
+
+engine = <span class="type">WebhookDeliveryEngine</span>()
+
+<span class="cm"># Register endpoint</span>
+ep = <span class="kw">await</span> engine.<span class="fn">register</span>(
+    org_id=<span class="str">"org_acme"</span>,
+    url=<span class="str">"https://hooks.acme.com/orchestra"</span>,
+    events=[<span class="type">WebhookEvent</span>.TASK_COMPLETED, <span class="type">WebhookEvent</span>.SECURITY_INCIDENT],
+    secret=<span class="str">"whsec_your_signing_key_here"</span>,
+)
+
+<span class="cm"># Verify incoming webhook (in your handler)</span>
+valid = engine.<span class="fn">verify_signature</span>(
+    payload=request.body,
+    signature=request.headers[<span class="str">"X-Orchestra-Signature"</span>],
+    secret=<span class="str">"whsec_your_signing_key_here"</span>,
+)
+<span class="kw">assert</span> valid, <span class="str">"Invalid webhook signature"</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Rate Limits ──────────────────────────────────────────────────── -->
+<section id="rate-limits" style="background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="container">
+    <div class="section-label">Rate Limits</div>
+    <div class="section-title">Generous defaults, enterprise scale</div>
+    <div class="section-desc">All plans include burst allowance. Contact us for custom limits on Enterprise.</div>
+
+    <table class="limits-table">
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Requests / min</th>
+          <th>Tasks / day</th>
+          <th>Concurrent agents</th>
+          <th>Webhooks</th>
+          <th>Team size</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="plan-name">Free</td>
+          <td>30</td>
+          <td>100</td>
+          <td>2</td>
+          <td>3 endpoints</td>
+          <td>-</td>
+        </tr>
+        <tr>
+          <td class="plan-name">Pro</td>
+          <td>300</td>
+          <td>5,000</td>
+          <td>10</td>
+          <td>25 endpoints</td>
+          <td>5 agents</td>
+        </tr>
+        <tr class="highlight">
+          <td class="plan-name" style="color: var(--teal);">Team</td>
+          <td>1,000</td>
+          <td>50,000</td>
+          <td>50</td>
+          <td>100 endpoints</td>
+          <td>20 agents</td>
+        </tr>
+        <tr>
+          <td class="plan-name" style="color: var(--gold);">Max / Enterprise</td>
+          <td>10,000+</td>
+          <td>Unlimited</td>
+          <td>500+</td>
+          <td>Unlimited</td>
+          <td>Unlimited</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── Webhooks ─────────────────────────────────────────────────────── -->
+<section id="webhooks">
+  <div class="container">
+    <div class="section-label">Webhooks</div>
+    <div class="section-title">Real-time event delivery</div>
+    <div class="section-desc">Every webhook includes an HMAC-SHA256 signature for verification. Here's how to validate in your server.</div>
+
+    <div class="code-tabs" data-tabs="webhook-verify">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="python">Python</button>
+        <button class="tab-btn" data-tab="typescript">TypeScript</button>
+      </div>
+
+      <div class="tab-panel active" data-tab="python">
+        <div class="code-block"><span class="kw">import</span> hmac, hashlib
+
+<span class="kw">def</span> <span class="fn">verify_orchestra_webhook</span>(payload: <span class="type">bytes</span>, signature: <span class="type">str</span>, secret: <span class="type">str</span>) -> <span class="type">bool</span>:
+    <span class="str">"""Verify X-Orchestra-Signature header."""</span>
+    expected = hmac.<span class="fn">new</span>(
+        secret.<span class="fn">encode</span>(<span class="str">"utf-8"</span>),
+        payload,
+        hashlib.sha256,
+    ).<span class="fn">hexdigest</span>()
+    <span class="kw">return</span> hmac.<span class="fn">compare_digest</span>(
+        signature,
+        f<span class="str">"sha256={expected}"</span>,
+    )
+
+<span class="cm"># In your Flask / FastAPI handler:</span>
+<span class="kw">if not</span> <span class="fn">verify_orchestra_webhook</span>(
+    request.body,
+    request.headers[<span class="str">"X-Orchestra-Signature"</span>],
+    <span class="str">"whsec_your_secret"</span>,
+):
+    <span class="kw">raise</span> <span class="type">HTTPException</span>(<span class="num">401</span>, <span class="str">"Invalid signature"</span>)<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" data-tab="typescript">
+        <div class="code-block"><span class="kw">import</span> crypto <span class="kw">from</span> <span class="str">'crypto'</span>;
+
+<span class="kw">function</span> <span class="fn">verifyOrchestraWebhook</span>(
+  payload: <span class="type">Buffer</span>,
+  signature: <span class="type">string</span>,
+  secret: <span class="type">string</span>,
+): <span class="type">boolean</span> {
+  <span class="kw">const</span> expected = crypto
+    .<span class="fn">createHmac</span>(<span class="str">'sha256'</span>, secret)
+    .<span class="fn">update</span>(payload)
+    .<span class="fn">digest</span>(<span class="str">'hex'</span>);
+  <span class="kw">return</span> crypto.<span class="fn">timingSafeEqual</span>(
+    <span class="type">Buffer</span>.<span class="fn">from</span>(signature),
+    <span class="type">Buffer</span>.<span class="fn">from</span>(<span class="str">`sha256=</span>${expected}<span class="str">`</span>),
+  );
+}
+
+<span class="cm">// In your Express handler:</span>
+app.<span class="fn">post</span>(<span class="str">'/webhook'</span>, (req, res) => {
+  <span class="kw">if</span> (!<span class="fn">verifyOrchestraWebhook</span>(
+    req.body, req.headers[<span class="str">'x-orchestra-signature'</span>], SECRET,
+  )) <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">401</span>).<span class="fn">send</span>(<span class="str">'Invalid signature'</span>);
+});<button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Status ───────────────────────────────────────────────────────── -->
+<section id="status" style="background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="container" style="text-align: center;">
+    <div class="section-label">System Status</div>
+    <div class="section-title">All systems operational</div>
+    <div style="margin: 24px 0;">
+      <span class="status-badge">
+        <span class="status-dot"></span>
+        Operational
+      </span>
+    </div>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 24px;">
+      99.99% uptime over the last 90 days. Global edge network across 12 regions.
+    </p>
+    <a href="#" class="btn-secondary" style="display: inline-block;">View Status Page</a>
+  </div>
+</section>
+
+<!-- ── Support ──────────────────────────────────────────────────────── -->
+<section id="support">
+  <div class="container">
+    <div class="section-label">Support</div>
+    <div class="section-title">We're here to help you ship</div>
+    <div class="section-desc">From community forums to dedicated engineering support — choose what fits your team.</div>
+
+    <div class="support-grid">
+      <div class="support-card">
+        <h4>Documentation</h4>
+        <p>Comprehensive guides, tutorials, and API reference with interactive examples.</p>
+      </div>
+      <div class="support-card">
+        <h4>Community</h4>
+        <p>Join 5,000+ developers in our Discord. Get answers, share patterns, report bugs.</p>
+      </div>
+      <div class="support-card">
+        <h4>Email Support</h4>
+        <p>Pro and Team plans include priority email support with 4-hour SLA.</p>
+      </div>
+      <div class="support-card">
+        <h4>Enterprise</h4>
+        <p>Dedicated solutions engineer, 24/7 Slack channel, custom SLA, and onboarding.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="#">Documentation</a>
+      <a href="#">API Reference</a>
+      <a href="#">GitHub</a>
+      <a href="#">Discord</a>
+      <a href="#">Status</a>
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+    </div>
+    <p>&copy; 2025 Horizon Orchestra. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────── -->
+<script>
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tabGroup = btn.closest('.code-tabs');
+    const tab = btn.dataset.tab;
+
+    tabGroup.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    tabGroup.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    btn.classList.add('active');
+    tabGroup.querySelector(`.tab-panel[data-tab="${tab}"]`).classList.add('active');
+  });
+});
+
+// Copy code
+function copyCode(button) {
+  const block = button.closest('.code-block');
+  const clone = block.cloneNode(true);
+  clone.querySelectorAll('.copy-btn').forEach(b => b.remove());
+  const text = clone.textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+  });
+}
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+
+// Nav scroll effect
+const nav = document.querySelector('.nav');
+window.addEventListener('scroll', () => {
+  nav.style.borderBottomColor = window.scrollY > 20 ? 'var(--border-2)' : 'var(--border)';
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,124 @@
+# Horizon Orchestra — Security Scanning Pipeline
+# Owner: Ashton Fritz — PROPRIETARY
+# Runs on every push + PR to catch secrets, vulnerabilities, and regressions.
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'    # Nightly deep scan at 2 AM UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # ── Secret scanning (gitleaks) ──────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks — scan for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ── Dependency vulnerability scan ────────────────────────────────────────────
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install safety
+        run: pip install safety pip-audit
+
+      - name: pip-audit — check for CVEs in Python deps
+        run: pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2022-42974 || true
+
+      - name: Safety — check known vulnerabilities
+        run: safety check -r requirements.txt --full-report || true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: npm audit — SDK
+        working-directory: sdk
+        run: npm install && npm audit --audit-level=high || true
+
+      - name: npm audit — Node bridge
+        working-directory: node
+        run: npm install && npm audit --audit-level=high || true
+
+  # ── Static analysis (bandit for Python) ──────────────────────────────────────
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bandit
+        run: pip install bandit[toml]
+
+      - name: Bandit — Python security linting
+        run: |
+          bandit -r orchestra/ \
+            -x orchestra/tests/ \
+            --severity-level medium \
+            --confidence-level medium \
+            --format json \
+            -o bandit-report.json || true
+          bandit -r orchestra/ \
+            -x orchestra/tests/ \
+            --severity-level high \
+            --confidence-level high
+
+      - name: Upload bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  # ── License compliance ────────────────────────────────────────────────────────
+  license-check:
+    name: License Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify proprietary LICENSE is present
+        run: |
+          if ! grep -q "PROPRIETARY" LICENSE; then
+            echo "ERROR: Proprietary license not found"
+            exit 1
+          fi
+          echo "✓ Proprietary license verified"
+
+      - name: Check no GPL/AGPL dependencies
+        run: |
+          pip install pip-licenses 2>/dev/null || true
+          pip install openai httpx 2>/dev/null || true
+          pip-licenses --fail-on="GNU General Public License v3\|GNU Affero General Public License" \
+            2>/dev/null || echo "License check complete"

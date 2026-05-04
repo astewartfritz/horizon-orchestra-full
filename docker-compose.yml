@@ -1,0 +1,87 @@
+# Horizon Orchestra — Docker Compose (Production)
+# Usage: docker compose up -d
+
+services:
+  # ── Python API + Node Bridge ──────────────────────────────────────────────
+  orchestra:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: horizon-orchestra
+    ports:
+      - "${PORT:-8000}:8000"       # Python API
+      - "${NODE_PORT:-3001}:3001"  # Node.js bridge
+    environment:
+      - PORT=8000
+      - NODE_PORT=3001
+      - WORKERS=4
+      - LOG_LEVEL=info
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+    volumes:
+      - orchestra-data:/app/data
+      - orchestra-workspace:/app/workspace
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/admin/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
+
+  # ── Redis (session cache + rate limiting) ─────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: horizon-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── PostgreSQL (production memory store) ──────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: horizon-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=orchestra
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-orchestra_dev}
+      - POSTGRES_DB=horizon
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestra -d horizon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  orchestra-data:
+  orchestra-workspace:
+  redis-data:
+  postgres-data:

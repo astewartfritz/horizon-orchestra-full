@@ -1,0 +1,56 @@
+[package]
+name = "orchestra-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Horizon Orchestra Contributors"]
+description = "High-performance Rust core for Horizon Orchestra — tokenization, vector search, JSON parsing, and seccomp compilation"
+license = "MIT"
+repository = "https://github.com/astewartfritz/horizon-orchestra"
+
+[lib]
+name = "orchestra_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Tokenizer support (HuggingFace tokenizers library)
+tokenizers = { version = "0.19", default-features = false }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Python bindings via PyO3
+pyo3 = { version = "0.21", features = ["extension-module"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Random number generation (for HNSW)
+rand = "0.8"
+
+# Memory-mapped I/O (for index persistence)
+memmap2 = "0.9"
+
+# SIMD-accelerated distance computations
+packed_simd_2 = { version = "0.3", optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+tempfile = "3.10"
+
+[features]
+default = []
+simd = ["packed_simd_2"]
+
+[[bench]]
+name = "tokenizer_bench"
+harness = false
+
+[[bench]]
+name = "hnsw_bench"
+harness = false
