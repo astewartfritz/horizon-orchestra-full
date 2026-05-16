@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "code-agent"
+version = "1.0.0"
+description = "JARVIS-like autonomous AI coding agent with CLI, web UI, voice/vision, multi-language scaffolding, LangFuse observability, and PWA support"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Orchestra"},
+]
+
+dependencies = [
+    "httpx>=0.27.0",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "click>=8.0",
+    "pydantic>=2.0",
+    "GitPython>=3.1",
+    "prometheus_client>=0.19",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.100", "uvicorn>=0.20"]
+ui = ["fastapi>=0.100", "uvicorn>=0.20", "httpx>=0.27"]
+tui = ["textual>=1.0"]
+sandbox = ["docker>=6.0"]
+mcp-arm = ["mcp>=0.1"]
+vllm = ["vllm>=0.8.0"]
+langfuse = ["langfuse>=4.6"]
+observability = ["prometheus_client>=0.19", "langfuse>=4.6"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "ruff>=0.1", "mypy>=1.0"]
+all = ["fastapi>=0.100", "uvicorn>=0.20", "httpx>=0.27", "prometheus_client>=0.19", "langfuse>=4.6", "docker>=6.0", "vllm>=0.8.0", "pytest>=7.0"]
+
+[project.scripts]
+code-agent = "code_agent.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/code_agent"]
+exclude = ["src/code_agent/ui/templates"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.mypy]
+strict = true
+python_version = "3.11"

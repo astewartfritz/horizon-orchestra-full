@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: orchestra
+  namespace: argocd
+spec:
+  description: Orchestra AI Agent Platform
+  sourceRepos:
+    - https://github.com/org/orchestra.git
+  destinations:
+    - namespace: orchestra*
+      server: https://kubernetes.default.svc
+    - namespace: orchestra-staging
+      server: https://kubernetes.default.svc
+    - namespace: orchestra-production
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+      kind: LimitRange
+  roles:
+    - name: ci-deployer
+      description: CI/CD deploy role
+      policies:
+        - p, proj:orchestra:ci-deployer, applications, sync, orchestra-staging/*, allow
+        - p, proj:orchestra:ci-deployer, applications, sync, orchestra-production/*, allow
+      groups:
+        - ci-deployers
+  orphanedResources:
+    warn: true

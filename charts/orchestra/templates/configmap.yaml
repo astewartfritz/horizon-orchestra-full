@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "orchestra.fullname" . }}-config
+  labels:
+    {{- include "orchestra.labels" . | nindent 4 }}
+data:
+  ORCHESTRA_HOST: "0.0.0.0"
+  ORCHESTRA_PORT: "{{ .Values.service.port }}"
+  ORCHESTRA_PROVIDER: "{{ .Values.provider }}"
+  ORCHESTRA_MODEL: "{{ .Values.model }}"
+  ORCHESTRA_LOG_LEVEL: "{{ .Values.extraEnv.ORCHESTRA_LOG_LEVEL }}"
+  OTEL_ENABLED: "{{ .Values.extraEnv.OTEL_ENABLED }}"
+  OTEL_SERVICE_NAME: "orchestra"
+  LLM_BASE_URL: "http://{{ include "orchestra.fullname" . }}-ollama:11434/v1"

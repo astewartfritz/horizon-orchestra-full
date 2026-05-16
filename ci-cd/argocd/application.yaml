@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orchestra
+  namespace: argocd
+spec:
+  project: orchestra
+  source:
+    repoURL: https://github.com/org/orchestra.git
+    targetRevision: main
+    path: charts/orchestra
+    helm:
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: image.repository
+          value: docker.io/orchestra
+        - name: image.tag
+          value: latest
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orchestra
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+      - Validate=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orchestra-staging
+  namespace: argocd
+spec:
+  project: orchestra
+  source:
+    repoURL: https://github.com/org/orchestra.git
+    targetRevision: main
+    path: ci-cd/argocd/kustomize/overlays/staging
+    kustomize: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orchestra-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orchestra-production
+  namespace: argocd
+spec:
+  project: orchestra
+  source:
+    repoURL: https://github.com/org/orchestra.git
+    targetRevision: main
+    path: ci-cd/argocd/kustomize/overlays/production
+    kustomize: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orchestra-production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

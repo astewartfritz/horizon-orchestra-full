@@ -1,0 +1,92 @@
+# ── Tempo + Jaeger + Grafana Observability Stack ──
+# Run: docker compose -f tracing/tempo/docker-compose.yaml up -d
+# Grafana: http://localhost:3000 (admin/admin)
+# Jaeger:   http://localhost:16686
+# Tempo:    http://localhost:3200
+
+services:
+  # ── Tempo (trace storage) ──────────────────────
+  tempo:
+    image: grafana/tempo:2.7.1
+    command:
+      - -config.file=/etc/tempo.yaml
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"    # HTTP (tempo query)
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    networks:
+      - observability
+
+  # ── Jaeger Query (UI for viewing traces) ──────
+  jaeger:
+    image: jaegertracing/jaeger-query:2.4.0
+    environment:
+      - SPAN_STORAGE_TYPE=grpc
+      - JAEGER_QUERY_GRPC_STORAGE_SERVER=tempo:9095
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "16687:16687"  # Admin
+    depends_on:
+      - tempo
+    networks:
+      - observability
+
+  # ── Jaeger Collector (alternative ingest) ─────
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector:2.4.0
+    environment:
+      - SPAN_STORAGE_TYPE=grpc
+      - JAEGER_COLLECTOR_GRPC_STORAGE_SERVER=tempo:9095
+    ports:
+      - "14269:14269"  # Health
+      - "14250:14250"  # gRPC
+      - "14268:14268"  # HTTP
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    depends_on:
+      - tempo
+    networks:
+      - observability
+
+  # ── Grafana (dashboards) ───────────────────────
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ORG_ROLE=Admin
+    volumes:
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tempo
+    networks:
+      - observability
+
+  # ── OpenTelemetry Collector (optional) ─────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.121.0
+    command:
+      - --config=/etc/otel-config.yaml
+    volumes:
+      - ./otel-collector.yaml:/etc/otel-config.yaml
+    ports:
+      - "4317"         # OTLP gRPC
+      - "4318"         # OTLP HTTP
+      - "55680"        # Legacy
+    depends_on:
+      - tempo
+    networks:
+      - observability
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  tempo-data:
+  grafana-data:

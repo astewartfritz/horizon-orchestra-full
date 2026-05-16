@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Agent — Autonomous AI Engineering</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0b14; color: #e1e4ed; line-height: 1.6; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* Nav */
+  nav { padding: 20px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e2030; }
+  nav .logo { font-size: 22px; font-weight: 700; color: #7aa2f7; text-decoration: none; }
+  nav .logo span { color: #9ece6a; }
+  nav .nav-links { display: flex; gap: 28px; align-items: center; }
+  nav .nav-links a { color: #737aa2; text-decoration: none; font-size: 14px; transition: color .2s; }
+  nav .nav-links a:hover { color: #c0caf5; }
+  .btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; transition: all .2s; border: none; }
+  .btn-primary { background: #4f8cf7; color: #fff; }
+  .btn-primary:hover { background: #3d7be0; transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: #737aa2; border: 1px solid #2f3346; }
+  .btn-outline:hover { border-color: #4f8cf7; color: #c0caf5; }
+  .btn-sm { padding: 6px 16px; font-size: 13px; }
+
+  /* Hero */
+  .hero { padding: 100px 0 80px; text-align: center; }
+  .hero .badge { display: inline-block; padding: 6px 16px; background: rgba(79, 140, 247, 0.12); border: 1px solid rgba(79, 140, 247, 0.25); border-radius: 100px; font-size: 13px; color: #7aa2f7; margin-bottom: 24px; }
+  .hero h1 { font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 20px; background: linear-gradient(135deg, #c0caf5 0%, #7aa2f7 50%, #9ece6a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { font-size: 18px; color: #737aa2; max-width: 700px; margin: 0 auto 36px; }
+  .hero .ctas { display: flex; gap: 16px; justify-content: center; }
+  .hero .stats { display: flex; gap: 48px; justify-content: center; margin-top: 60px; }
+  .hero .stats .stat { text-align: center; }
+  .hero .stats .stat .num { font-size: 32px; font-weight: 700; color: #c0caf5; }
+  .hero .stats .stat .label { font-size: 13px; color: #565f89; margin-top: 4px; }
+
+  /* Terminal demo */
+  .terminal { background: #1a1b26; border: 1px solid #2f3346; border-radius: 12px; overflow: hidden; margin: 60px auto; max-width: 800px; }
+  .terminal .bar { padding: 12px 16px; background: #1f2335; border-bottom: 1px solid #2f3346; display: flex; align-items: center; gap: 8px; }
+  .terminal .bar .dots { display: flex; gap: 6px; }
+  .terminal .bar .dots span { width: 10px; height: 10px; border-radius: 50%; }
+  .terminal .bar .dots .r { background: #f7768e; }
+  .terminal .bar .dots .y { background: #e0af68; }
+  .terminal .bar .dots .g { background: #9ece6a; }
+  .terminal .bar .title { color: #565f89; font-size: 13px; margin-left: 12px; }
+  .terminal .body { padding: 20px; font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.7; }
+  .terminal .body .prompt { color: #7aa2f7; }
+  .terminal .body .cmd { color: #c0caf5; }
+  .terminal .body .info { color: #565f89; }
+  .terminal .body .ok { color: #9ece6a; }
+  .terminal .body .warn { color: #e0af68; }
+  .terminal .body .highlight { color: #bb9af7; }
+
+  /* Features */
+  .features { padding: 80px 0; }
+  .features h2 { text-align: center; font-size: 36px; font-weight: 700; margin-bottom: 12px; }
+  .features h2 + p { text-align: center; color: #737aa2; margin-bottom: 60px; font-size: 16px; }
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .feature-card { background: #1a1b26; border: 1px solid #2f3346; border-radius: 12px; padding: 28px; transition: border-color .2s, transform .2s; }
+  .feature-card:hover { border-color: #4f8cf7; transform: translateY(-2px); }
+  .feature-card .icon { font-size: 28px; margin-bottom: 16px; }
+  .feature-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #c0caf5; }
+  .feature-card p { font-size: 13px; color: #737aa2; line-height: 1.6; }
+  .feature-card .tag { display: inline-block; padding: 2px 8px; background: rgba(79, 140, 247, 0.1); border-radius: 4px; font-size: 11px; color: #7aa2f7; margin-top: 8px; }
+
+  /* Architecture */
+  .arch { padding: 80px 0; background: #0e0f1a; }
+  .arch h2 { text-align: center; font-size: 36px; font-weight: 700; margin-bottom: 40px; }
+  .arch-diagram { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .arch-layer { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .arch-box { padding: 12px 20px; background: #1a1b26; border: 1px solid #2f3346; border-radius: 8px; font-size: 13px; color: #c0caf5; text-align: center; min-width: 80px; }
+  .arch-box.highlight { border-color: #4f8cf7; background: rgba(79, 140, 247, 0.08); }
+  .arch-box.green { border-color: #9ece6a; background: rgba(158, 206, 106, 0.08); }
+  .arch-box.purple { border-color: #bb9af7; background: rgba(187, 154, 247, 0.08); }
+  .arch-box.orange { border-color: #e0af68; background: rgba(224, 175, 104, 0.08); }
+  .arch-arrow { color: #2f3346; font-size: 16px; }
+
+  /* CLI commands */
+  .commands { padding: 80px 0; }
+  .commands h2 { text-align: center; font-size: 36px; font-weight: 700; margin-bottom: 40px; }
+  .command-groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .cmd-group h3 { font-size: 14px; color: #7aa2f7; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .cmd-group ul { list-style: none; }
+  .cmd-group ul li { padding: 6px 0; font-size: 13px; color: #737aa2; font-family: 'Fira Code', monospace; }
+  .cmd-group ul li::before { content: '$ '; color: #2f3346; }
+
+  /* Integrations */
+  .integrations { padding: 80px 0; background: #0e0f1a; }
+  .integrations h2 { text-align: center; font-size: 36px; font-weight: 700; margin-bottom: 40px; }
+  .int-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; text-align: center; }
+  .int-item { padding: 20px 12px; background: #1a1b26; border: 1px solid #2f3346; border-radius: 8px; font-size: 13px; color: #737aa2; transition: border-color .2s; }
+  .int-item:hover { border-color: #4f8cf7; }
+  .int-item .int-icon { font-size: 28px; margin-bottom: 8px; }
+
+  /* Pricing */
+  .pricing { padding: 80px 0; }
+  .pricing h2 { text-align: center; font-size: 36px; font-weight: 700; margin-bottom: 8px; }
+  .pricing > p { text-align: center; color: #737aa2; margin-bottom: 48px; }
+  .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 900px; margin: 0 auto; }
+  .pricing-card { background: #1a1b26; border: 1px solid #2f3346; border-radius: 12px; padding: 32px; text-align: center; position: relative; }
+  .pricing-card.popular { border-color: #4f8cf7; }
+  .pricing-card .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); padding: 4px 16px; background: #4f8cf7; border-radius: 100px; font-size: 11px; font-weight: 600; color: #fff; }
+  .pricing-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .pricing-card .price { font-size: 36px; font-weight: 800; color: #c0caf5; margin-bottom: 4px; }
+  .pricing-card .price-sub { font-size: 13px; color: #565f89; margin-bottom: 20px; }
+  .pricing-card ul { list-style: none; text-align: left; margin-bottom: 24px; }
+  .pricing-card ul li { padding: 6px 0; font-size: 13px; color: #737aa2; }
+  .pricing-card ul li::before { content: '✓ '; color: #9ece6a; font-weight: 700; }
+
+  /* Footer */
+  footer { padding: 40px 0; border-top: 1px solid #1e2030; text-align: center; font-size: 13px; color: #565f89; }
+  footer a { color: #737aa2; text-decoration: none; }
+  footer a:hover { color: #c0caf5; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .command-groups { grid-template-columns: repeat(2, 1fr); }
+    .int-grid { grid-template-columns: repeat(3, 1fr); }
+    .pricing-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .features-grid, .command-groups { grid-template-columns: 1fr; }
+    .int-grid { grid-template-columns: repeat(2, 1fr); }
+    .hero h1 { font-size: 32px; }
+    .hero .stats { flex-direction: column; gap: 24px; }
+  }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .hero, .feature-card, .pricing-card { animation: fadeIn .6s ease-out; }
+  .feature-card:nth-child(2) { animation-delay: .1s; }
+  .feature-card:nth-child(3) { animation-delay: .2s; }
+</style>
+</head>
+<body>
+
+<nav class="container">
+  <a href="#" class="logo">Code<span>Agent</span></a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#commands">Commands</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/astewartfritz/code-agent">GitHub</a>
+    <a href="#" class="btn btn-primary btn-sm">Get Started</a>
+  </div>
+</nav>
+
+<section class="hero container">
+  <div class="badge">v0.4 — Open Source · MIT License</div>
+  <h1>Autonomous AI<br>Engineering Agent</h1>
+  <p>87 CLI commands · 31 tools · Multi-LLM · Multi-agent orchestration · Local-first. Your machine, your data, your rules.</p>
+  <div class="ctas">
+    <a href="#" class="btn btn-primary">Install Now</a>
+    <a href="#features" class="btn btn-outline">See What It Does</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num">87</div><div class="label">CLI Commands</div></div>
+    <div class="stat"><div class="num">31</div><div class="label">Tools</div></div>
+    <div class="stat"><div class="num">30+</div><div class="label">Modules</div></div>
+    <div class="stat"><div class="num">91</div><div class="label">Public Exports</div></div>
+  </div>
+</section>
+
+<div class="terminal container">
+  <div class="bar">
+    <div class="dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+    <div class="title">agent — session</div>
+  </div>
+  <div class="body">
+    <div><span class="prompt">agent ~ </span><span class="cmd">run "build a REST API for bookmarks"</span></div>
+    <div><span class="info">📋 Planning...</span></div>
+    <div><span class="info">✓ Decomposed into 4 tasks</span></div>
+    <div><span class="info">✓ Routing to agents</span></div>
+    <div><span class="info">🔬 Researcher analyzing REST API patterns...</span></div>
+    <div><span class="info">💻 Coder scaffolding FastAPI project...</span></div>
+    <div><span class="info">💻 Coder writing CRUD endpoints...</span></div>
+    <div><span class="info">🧪 Tester generating pytest suite...</span></div>
+    <div><span class="info">🔍 Reviewer security audit...</span></div>
+    <div><span class="warn">🔍 ⚠ Found: SQL injection in search endpoint</span></div>
+    <div><span class="info">💻 Coder fixed parameterized queries ✓</span></div>
+    <div><span class="ok">✅ Done in 47s — 6 files, 842 lines, 0 issues</span></div>
+    <div><span class="prompt">agent ~ </span><span class="cmd">▌</span></div>
+  </div>
+</div>
+
+<section class="features" id="features">
+  <div class="container">
+    <h2>Everything You Need</h2>
+    <p>87 CLI commands, 31 tools, and 30+ modules working together as an autonomous AI engineering team.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="icon">🧠</div>
+        <h3>Multi-LLM Support</h3>
+        <p>OpenAI, Anthropic, Ollama — mix providers per agent with fallback chains and rate limiting.</p>
+        <span class="tag">Core</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔀</div>
+        <h3>Multi-Agent Orchestration</h3>
+        <p>Sequential, parallel, voting, debate, reflection, and specialist teams. Planner decomposes goals, routes to agents, synthesizes results.</p>
+        <span class="tag">Core</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔒</div>
+        <h3>Privacy Router</h3>
+        <p>Routes sensitive queries to local models, complex tasks to cloud. Never expose credentials or private data to external APIs.</p>
+        <span class="tag">New</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🛡️</div>
+        <h3>OpenShell Policy Engine</h3>
+        <p>Declarative network, filesystem, and shell policies. Android-style permissions for your AI. Approve dangerous operations before execution.</p>
+        <span class="tag">New</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🌐</div>
+        <h3>Browser Engine</h3>
+        <p>Headless web research with multi-tab orchestration, search, text extraction, and link analysis.</p>
+        <span class="tag">New</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">💬</div>
+        <h3>Multi-Channel Communication</h3>
+        <p>CLI, REPL, Web UI, TUI, Slack, Telegram, Discord — interact with your agents from any interface.</p>
+        <span class="tag">New</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎤</div>
+        <h3>Voice Interface</h3>
+        <p>Speech-to-text and text-to-speech via OpenAI Whisper, pyttsx3, or system TTS. Hands-free interaction.</p>
+        <span class="tag">New</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📚</div>
+        <h3>Self-Learning Engine</h3>
+        <p>Persistent cross-session learning. Captures insights, preferences, and patterns. Gets better over time.</p>
+        <span class="tag">New</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔬</div>
+        <h3>Code Analysis</h3>
+        <p>AST parsing, symbol search, code smells, quality reports, dependency analysis, license scanning, and multi-language support.</p>
+        <span class="tag">Pro</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🧪</div>
+        <h3>Test Generation</h3>
+        <p>Auto-generate pytest/unittest suites, run coverage analysis, watch files for changes, and validate results.</p>
+        <span class="tag">Pro</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h3>Observability</h3>
+        <p>Cost tracking, monitoring dashboard, distributed tracing, execution logs, session search, and export.</p>
+        <span class="tag">Pro</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔧</div>
+        <h3>Integrations</h3>
+        <p>Calendar, email, GitHub webhooks, Slack notifications, MCP servers, plugin marketplace, and 200+ apps via Composio.</p>
+        <span class="tag">Pro</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">⚡</div>
+        <h3>Sandboxed Execution</h3>
+        <p>Docker sandbox and subprocess sandbox with blocked commands, restricted imports, and guardrails.</p>
+        <span class="tag">Core</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🧩</div>
+        <h3>Plugin System</h3>
+        <p>Dynamic tool discovery from files and packages. Plugin marketplace with 8 built-in plugins. Build your own.</p>
+        <span class="tag">Core</span>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📝</div>
+        <h3>Knowledge & Memory</h3>
+        <p>Persistent vector memory with SQLite, session search, conversation summarization, and context management.</p>
+        <span class="tag">Core</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="arch" id="architecture">
+  <div class="container">
+    <h2>Architecture</h2>
+    <div class="arch-diagram">
+      <div class="arch-layer">
+        <div class="arch-box">CLI</div>
+        <div class="arch-box">REPL</div>
+        <div class="arch-box">Web UI</div>
+        <div class="arch-box">TUI</div>
+        <div class="arch-box">API</div>
+        <div class="arch-box">MCP</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box highlight">Agent Loop</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box green">31 Tools</div>
+        <div class="arch-box green">Multi-LLM</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box">Memory</div>
+        <div class="arch-box">Cache</div>
+        <div class="arch-box">Sessions</div>
+        <div class="arch-box">Context</div>
+        <div class="arch-box">Rate Limit</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box purple">Knowledge</div>
+        <div class="arch-box purple">Vector</div>
+        <div class="arch-box purple">Analysis</div>
+        <div class="arch-box purple">Quality</div>
+        <div class="arch-box purple">Security</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box orange">Swarm</div>
+        <div class="arch-box orange">Pipeline</div>
+        <div class="arch-box orange">Workflow</div>
+        <div class="arch-box orange">Scheduler</div>
+        <div class="arch-box orange">Multi-Agent</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box">Export</div>
+        <div class="arch-box">Telemetry</div>
+        <div class="arch-box">Logs</div>
+        <div class="arch-box">Monitor</div>
+        <div class="arch-box">Dashboard</div>
+      </div>
+      <div class="arch-arrow">▼</div>
+      <div class="arch-layer">
+        <div class="arch-box">OpenShell</div>
+        <div class="arch-box">Privacy</div>
+        <div class="arch-box">Guardrails</div>
+        <div class="arch-box">Sandbox</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="commands" id="commands">
+  <div class="container">
+    <h2>87 CLI Commands</h2>
+    <div class="command-groups">
+      <div class="cmd-group">
+        <h3>Run</h3>
+        <ul>
+          <li>run</li>
+          <li>repl</li>
+          <li>tui</li>
+          <li>serve</li>
+          <li>daemon</li>
+          <li>apiserver</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Analyze</h3>
+        <ul>
+          <li>analyze</li>
+          <li>multilang</li>
+          <li>codesearch</li>
+          <li>smells</li>
+          <li>quality</li>
+          <li>deps</li>
+          <li>licenses</li>
+          <li>nlquery</li>
+          <li>arch</li>
+          <li>dataviz</li>
+          <li>loganalyze</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Verify</h3>
+        <ul>
+          <li>review</li>
+          <li>audit</li>
+          <li>validate</li>
+          <li>health</li>
+          <li>diagnose</li>
+          <li>testgen</li>
+          <li>testwatch</li>
+          <li>coverage</li>
+          <li>profile</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Improve</h3>
+        <ul>
+          <li>improve</li>
+          <li>transform</li>
+          <li>optimize</li>
+          <li>errors</li>
+          <li>refactor</li>
+          <li>migrate</li>
+          <li>boilerplate</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Knowledge</h3>
+        <ul>
+          <li>knowledge</li>
+          <li>memsearch</li>
+          <li>sessearch</li>
+          <li>context</li>
+          <li>selflearn</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Orchestrate</h3>
+        <ul>
+          <li>swarm</li>
+          <li>workflow</li>
+          <li>pipeline</li>
+          <li>schedule</li>
+          <li>batch</li>
+          <li>abtest</li>
+          <li>collab</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Observe</h3>
+        <ul>
+          <li>logs</li>
+          <li>traces</li>
+          <li>cost</li>
+          <li>monitor</li>
+          <li>dashboard</li>
+          <li>estimate</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Configure</h3>
+        <ul>
+          <li>init</li>
+          <li>profile</li>
+          <li>template</li>
+          <li>prompt</li>
+          <li>promptver</li>
+          <li>completions</li>
+          <li>envmgr</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Integrate</h3>
+        <ul>
+          <li>notify</li>
+          <li>export</li>
+          <li>hooks</li>
+          <li>github</li>
+          <li>mcp</li>
+          <li>market</li>
+          <li>plugins</li>
+          <li>integrate</li>
+          <li>channel</li>
+        </ul>
+      </div>
+      <div class="cmd-group">
+        <h3>Data</h3>
+        <ul>
+          <li>api</li>
+          <li>sql</li>
+          <li>sandbox</li>
+          <li>debug</li>
+          <li>human</li>
+          <li>autocomplete</li>
+          <li>voice</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="integrations">
+  <div class="container">
+    <h2>Integrations</h2>
+    <div class="int-grid">
+      <div class="int-item"><div class="int-icon">🤖</div>OpenAI</div>
+      <div class="int-item"><div class="int-icon">🦙</div>Anthropic</div>
+      <div class="int-item"><div class="int-icon">📦</div>Ollama</div>
+      <div class="int-item"><div class="int-icon">🐙</div>GitHub</div>
+      <div class="int-item"><div class="int-icon">💬</div>Slack</div>
+      <div class="int-item"><div class="int-icon">✈️</div>Telegram</div>
+      <div class="int-item"><div class="int-icon">🎮</div>Discord</div>
+      <div class="int-item"><div class="int-icon">🐳</div>Docker</div>
+      <div class="int-item"><div class="int-icon">🗄️</div>SQLite</div>
+      <div class="int-item"><div class="int-icon">📧</div>Email</div>
+      <div class="int-item"><div class="int-icon">📅</div>Calendar</div>
+      <div class="int-item"><div class="int-icon">📡</div>MCP</div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="container">
+    <h2>Start Free. Scale When Ready.</h2>
+    <p>100% local and free forever. Cloud features are optional upgrades.</p>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>Free</h3>
+        <div class="price">$0</div>
+        <div class="price-sub">forever</div>
+        <ul>
+          <li>All local LLMs (Ollama)</li>
+          <li>31 tools</li>
+          <li>87 CLI commands</li>
+          <li>Multi-agent orchestration</li>
+          <li>Privacy Router</li>
+          <li>OpenShell policies</li>
+          <li>Community support</li>
+        </ul>
+        <a href="#" class="btn btn-primary">Get Started Free</a>
+      </div>
+      <div class="pricing-card popular">
+        <div class="popular-badge">Popular</div>
+        <h3>Pro</h3>
+        <div class="price">$19</div>
+        <div class="price-sub">/month</div>
+        <ul>
+          <li>Everything in Free</li>
+          <li>Cloud LLM access</li>
+          <li>Voice interface</li>
+          <li>Multi-channel comms</li>
+          <li>Calendar & email integration</li>
+          <li>Self-learning across sessions</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#" class="btn btn-primary">Start Pro Trial</a>
+      </div>
+      <div class="pricing-card">
+        <h3>Enterprise</h3>
+        <div class="price">$99</div>
+        <div class="price-sub">/month</div>
+        <ul>
+          <li>Everything in Pro</li>
+          <li>Team management (multi-tenant)</li>
+          <li>Dedicated API server</li>
+          <li>Custom integrations</li>
+          <li>SLA guarantee</li>
+          <li>On-premise deployment</li>
+          <li>Dedicated support engineer</li>
+        </ul>
+        <a href="#" class="btn btn-outline">Contact Sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="container">
+  <p><a href="#">Code Agent</a> — Open source under MIT License. Built with Python.</p>
+  <p style="margin-top:8px"><a href="https://github.com/astewartfritz/code-agent">GitHub</a> · <a href="#">Documentation</a> · <a href="#">Discord</a></p>
+</footer>
+
+</body>
+</html>

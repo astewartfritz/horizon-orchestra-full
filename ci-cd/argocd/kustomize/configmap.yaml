@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestra-config
+  labels:
+    app.kubernetes.io/component: config
+data:
+  LOG_LEVEL: "info"
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  LANGCHAIN_TRACING: "true"
+  LANGCHAIN_PROJECT: "orchestra"
+  GATEWAY_PORT: "8000"
+  CORS_ORIGINS: "https://orchestra.ai,https://app.orchestra.ai"

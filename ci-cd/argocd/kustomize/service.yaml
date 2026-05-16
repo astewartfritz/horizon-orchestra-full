@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestra
+  labels:
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+    - port: 8001
+      targetPort: metrics
+      name: metrics
+  selector:
+    app.kubernetes.io/component: api

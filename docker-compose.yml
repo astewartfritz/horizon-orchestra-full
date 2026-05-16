@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  orchestra:
+    build: .
+    image: orchestra:latest
+    ports:
+      - "${ORCHESTRA_PORT:-8000}:8000"
+    environment:
+      - ORCHESTRA_HOST=0.0.0.0
+      - ORCHESTRA_PORT=8000
+      - ORCHESTRA_PROVIDER=${LLM_PROVIDER:-ollama}
+      - ORCHESTRA_MODEL=${LLM_MODEL:-nemotron-mini}
+      - ORCHESTRA_WORKSPACE=/workspace
+      - ORCHESTRA_LOG_LEVEL=${LOG_LEVEL:-info}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434/v1}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-hash}
+    volumes:
+      - orchestra_data:/workspace/.agent-skills.db
+      - orchestra_data:/workspace/.agent-skills-v2.db
+      - orchestra_data:/workspace/.agent-sessions
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1m
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  ollama_models:
+  orchestra_data:

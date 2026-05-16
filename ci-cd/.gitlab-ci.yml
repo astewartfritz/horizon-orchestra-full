@@ -1,0 +1,181 @@
+# ──────────────────────────────────────────────
+# GitLab CI/CD — Orchestra Full Pipeline
+# Stages: build → test → lint → quality → docker → deploy
+# ──────────────────────────────────────────────
+
+stages:
+  - build
+  - test
+  - lint
+  - quality
+  - docker
+  - deploy
+
+variables:
+  DOCKER_REGISTRY: ${CI_REGISTRY_IMAGE}
+  DOCKER_TAG: ${CI_COMMIT_SHORT_SHA}
+  PYTHONPATH: "src;src/code_agent"
+  COVERAGE_THRESHOLD: "80"
+  PIP_CACHE_DIR: "${CI_PROJECT_DIR}/.pip-cache"
+  NPM_CACHE_DIR: "${CI_PROJECT_DIR}/.npm-cache"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .pip-cache/
+    - .npm-cache/
+    - channels/ts/node_modules/
+    - api/express/node_modules/
+
+default:
+  image: python:3.13-slim
+  before_script:
+    - pip install --upgrade pip
+    - pip install -e ".[dev]" 2>&1 | tail -3
+
+# ── Build Stage ──────────────────────────────
+
+python-deps:
+  stage: build
+  script:
+    - pip install -e ".[dev]"
+  artifacts:
+    paths:
+      - src/
+    expire_in: 1 hour
+
+node-deps:
+  stage: build
+  image: node:22-alpine
+  script:
+    - cd channels/ts && npm ci
+    - cd ../../api/express && npm ci
+  artifacts:
+    paths:
+      - channels/ts/node_modules/
+      - api/express/node_modules/
+    expire_in: 1 hour
+
+# ── Test Stage ───────────────────────────────
+
+python-tests:
+  stage: test
+  script:
+    - python -m pytest src/ -v --junit-report=junit-python.xml --cov=src/ --cov-report=xml --cov-report=term
+  artifacts:
+    reports:
+      junit: junit-python.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 1 week
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+
+node-tests:
+  stage: test
+  image: node:22-alpine
+  script:
+    - cd channels/ts && npm test -- --reporter junit --reporter-options output=junit-node.xml
+  artifacts:
+    reports:
+      junit: channels/ts/junit-node.xml
+    expire_in: 1 week
+  needs:
+    - node-deps
+
+# ── Lint Stage ───────────────────────────────
+
+python-lint:
+  stage: lint
+  script:
+    - ruff check src/ --output-format=gitlab > gl-code-quality-report.json || true
+    - mypy src/ --ignore-missing-imports || true
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+    expire_in: 1 month
+
+typescript-lint:
+  stage: lint
+  image: node:22-alpine
+  script:
+    - cd channels/ts && npm run lint || true
+  needs:
+    - node-deps
+
+# ── Quality Stage ────────────────────────────
+
+coverage-gate:
+  stage: quality
+  script:
+    - |
+      coverage=$(python -c "import xml.etree.ElementTree as ET; root=ET.parse('coverage.xml').getroot(); print(root.attrib.get('line-rate', '0'))")
+      pct=$(python -c "print(f'{float($coverage)*100:.1f}')")
+      echo "Coverage: ${pct}%"
+      if (( $(echo "$pct < $COVERAGE_THRESHOLD" | bc -l) )); then
+        echo "FAIL: Coverage ${pct}% < ${COVERAGE_THRESHOLD}%"
+        exit 1
+      fi
+  needs:
+    - python-tests
+
+security-scan:
+  stage: quality
+  script:
+    - pip install bandit safety pip-licenses
+    - bandit -r src/ -f json -o gl-bandit.json || true
+    - safety check --full-report || true
+    - pip-licenses --format=json --output-file=gl-licenses.json || true
+  artifacts:
+    reports:
+      sast: gl-bandit.json
+    expire_in: 1 month
+
+# ── Docker Stage ─────────────────────────────
+
+docker-build:
+  stage: docker
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t ${DOCKER_REGISTRY}:${DOCKER_TAG} -f Dockerfile .
+    - docker tag ${DOCKER_REGISTRY}:${DOCKER_TAG} ${DOCKER_REGISTRY}:latest
+    - docker push ${DOCKER_REGISTRY}:${DOCKER_TAG}
+    - docker push ${DOCKER_REGISTRY}:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+      when: always
+
+# ── Deploy Stage ─────────────────────────────
+
+deploy-staging:
+  stage: deploy
+  image: alpine/k8s:latest
+  script:
+    - python ci-cd/scripts/deploy.py --env staging --tag ${DOCKER_TAG}
+  environment:
+    name: staging
+    url: https://staging.orchestra.ai
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+
+deploy-production:
+  stage: deploy
+  image: alpine/k8s:latest
+  script:
+    - python ci-cd/scripts/deploy.py --env production --tag ${DOCKER_TAG}
+  environment:
+    name: production
+    url: https://orchestra.ai
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: false

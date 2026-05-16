@@ -1,0 +1,19 @@
+{
+  "name": "hotels",
+  "fields": [
+    { "name": "id", "type": "Edm.String", "key": true, "retrievable": true },
+    { "name": "name", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "description", "type": "Edm.String", "searchable": true, "retrievable": true },
+    { "name": "location", "type": "Edm.GeographyPoint", "filterable": true, "retrievable": true },
+    { "name": "rating", "type": "Edm.Double", "sortable": true, "filterable": true, "facetable": true, "retrievable": true },
+    { "name": "price", "type": "Edm.Double", "sortable": true, "filterable": true, "facetable": true, "retrievable": true },
+    { "name": "amenities", "type": "Collection(Edm.String)", "filterable": true, "facetable": true, "retrievable": true },
+    { "name": "address", "type": "Edm.ComplexType", "retrievable": true, "fields": [
+      { "name": "street", "type": "Edm.String", "retrievable": true },
+      { "name": "city", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+      { "name": "state", "type": "Edm.String", "filterable": true, "retrievable": true },
+      { "name": "zip", "type": "Edm.String", "filterable": true, "retrievable": true }
+    ]},
+    { "name": "embedding", "type": "Collection(Edm.Single)", "retrievable": false, "searchable": true }
+  ]
+}

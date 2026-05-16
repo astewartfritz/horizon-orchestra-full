@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orchestra
+
+commonLabels:
+  app.kubernetes.io/name: orchestra
+  app.kubernetes.io/part-of: orchestra
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - configmap.yaml
+  - hpa.yaml
+
+configMapGenerator:
+  - name: orchestra-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=info
+      - OTEL_ENABLED=true
+
+images:
+  - name: docker.io/orchestra
+    newTag: latest

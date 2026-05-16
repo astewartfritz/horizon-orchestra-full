@@ -1,0 +1,65 @@
+# ── Helm values for CI/CD deployments ─────────
+
+# Production-grade overrides for CI/CD pipeline
+
+image:
+  repository: docker.io/orchestra
+  tag: latest
+  pullPolicy: Always
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  hosts:
+    - host: orchestra.ai
+      paths:
+        - /
+  tls:
+    - secretName: orchestra-tls
+      hosts:
+        - orchestra.ai
+
+config:
+  LOG_LEVEL: info
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  LANGCHAIN_TRACING: "true"
+  CORS_ORIGINS: https://orchestra.ai,https://app.orchestra.ai
+
+ollama:
+  enabled: true
+  resources:
+    limits:
+      cpu: 8
+      memory: 16Gi
+
+probes:
+  enabled: true
+  livenessDelay: 30
+  readinessDelay: 10
+  startupDelay: 5
+  startupFailures: 30
+
+serviceAccount:
+  create: true
+  name: orchestra
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

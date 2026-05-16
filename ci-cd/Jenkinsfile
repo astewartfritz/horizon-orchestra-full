@@ -1,0 +1,225 @@
+/* ──────────────────────────────────────────────
+ * Jenkins Declarative Pipeline — Orchestra CI/CD
+ * Triggers: PR (multibranch) + push to main
+ * ────────────────────────────────────────────── */
+
+pipeline {
+    agent {
+        kubernetes {
+            label 'orchestra-agent'
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: python
+    image: python:3.13-slim
+    command: ["cat"]
+    tty: true
+  - name: docker
+    image: docker:27-cli
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+    - name: docker-socket
+      mountPath: /var/run/docker.sock
+  - name: node
+    image: node:22-alpine
+    command: ["cat"]
+    tty: true
+  volumes:
+  - name: docker-socket
+    hostPath:
+      path: /var/run/docker.sock
+'''
+        }
+    }
+
+    environment {
+        DOCKER_REGISTRY     = "${env.DOCKER_REGISTRY ?: 'docker.io/orchestra'}"
+        DOCKER_TAG          = "${env.DOCKER_TAG ?: env.GIT_COMMIT?.take(8)}"
+        PYTHONPATH          = "src;src/code_agent"
+        COVERAGE_THRESHOLD  = "${env.COVERAGE_THRESHOLD ?: '80'}"
+        SONARQUBE_URL       = "${env.SONARQUBE_URL ?: ''}"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        gitLabConnection('gitlab')
+    }
+
+    stages {
+        stage('Build') {
+            parallel {
+                stage('Python Deps') {
+                    steps {
+                        container('python') {
+                            sh 'pip install --upgrade pip'
+                            sh 'pip install -e ".[dev]" 2>&1 | tail -5'
+                        }
+                    }
+                }
+                stage('Node Deps') {
+                    stages {
+                        stage('npm Install') {
+                            steps {
+                                container('node') {
+                                    dir('channels/ts') {
+                                        sh 'npm ci'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            parallel {
+                stage('Python Tests') {
+                    steps {
+                        container('python') {
+                            sh 'python -m pytest src/ -v --junitxml=junit-python.xml --cov=src/ --cov-report=xml'
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'junit-python.xml'
+                            cobertura coberturaReportFile: 'coverage.xml'
+                        }
+                    }
+                }
+                stage('Node Tests') {
+                    steps {
+                        container('node') {
+                            dir('channels/ts') {
+                                sh 'npm test -- --reporter junit --reporter-options output=junit-node.xml'
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'channels/ts/junit-node.xml'
+                        }
+                    }
+                }
+                stage('API Tests') {
+                    steps {
+                        container('node') {
+                            dir('api/express') {
+                                sh 'npm ci && npm test -- --reporter junit 2>&1 | tail -10 || true'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Lint & Quality') {
+            parallel {
+                stage('Python Lint') {
+                    steps {
+                        container('python') {
+                            sh 'ruff check src/'
+                            sh 'mypy src/ --ignore-missing-imports || true'
+                        }
+                    }
+                }
+                stage('Security Scan') {
+                    steps {
+                        container('python') {
+                            sh 'bandit -r src/ -f json -o bandit-report.json || true'
+                            sh 'safety check --full-report || true'
+                        }
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'bandit-report.json', allowEmpty: true
+                        }
+                    }
+                }
+                stage('Coverage Gate') {
+                    steps {
+                        container('python') {
+                            sh '''
+                                coverage=$(grep -oP 'line-rate="\\K[0-9.]+' coverage.xml | head -1)
+                                pct=$(python -c "print(f'{float($coverage)*100:.1f}')")
+                                echo "Coverage: ${pct}%"
+                                if (( $(echo "$pct < $COVERAGE_THRESHOLD" | bc -l) )); then
+                                    echo "FAIL: Coverage ${pct}% < ${COVERAGE_THRESHOLD}%"
+                                    exit 1
+                                fi
+                            '''
+                        }
+                    }
+                }
+                stage('License Check') {
+                    steps {
+                        container('python') {
+                            sh '''
+                                pip-licenses --format=json --output-file=licenses.json || true
+                                pip-licenses --allow-only="MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;Python-2.0;PSF;Unlicense" || true
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            when {
+                branch 'main'
+            }
+            steps {
+                container('docker') {
+                    sh "docker build -t ${DOCKER_REGISTRY}:${DOCKER_TAG} -f Dockerfile ."
+                    sh "docker tag ${DOCKER_REGISTRY}:${DOCKER_TAG} ${DOCKER_REGISTRY}:latest"
+                    withDockerRegistry([credentialsId: 'docker-registry-creds', url: '']) {
+                        sh "docker push ${DOCKER_REGISTRY}:${DOCKER_TAG}"
+                        sh "docker push ${DOCKER_REGISTRY}:latest"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                container('python') {
+                    sh "python ci-cd/scripts/deploy.py --env staging --tag ${DOCKER_TAG}"
+                }
+            }
+        }
+
+        stage('Deploy Production') {
+            when {
+                branch 'main'
+            }
+            input {
+                message 'Deploy to production?'
+                ok 'Yes, deploy to production'
+            }
+            steps {
+                container('python') {
+                    sh "python ci-cd/scripts/deploy.py --env production --tag ${DOCKER_TAG}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline completed successfully'
+        }
+        failure {
+            echo 'Pipeline failed — check logs'
+        }
+    }
+}

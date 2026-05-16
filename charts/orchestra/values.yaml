@@ -1,0 +1,174 @@
+# ── Orchestra Helm Values ─────────────────────────────────────
+# Override any value with --set or a custom values file.
+
+replicaCount: 2
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+image:
+  repository: orchestra/orchestra
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── LLM Provider ────────────────────────────────────────────
+
+provider: ollama
+model: nemotron-mini
+
+# ── Ollama Sidecar ──────────────────────────────────────────
+
+ollama:
+  enabled: true
+  image:
+    repository: ollama/ollama
+    tag: latest
+    pullPolicy: IfNotPresent
+  keepAlive: -1m
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "16Gi"
+      cpu: "8"
+  persistentVolume:
+    enabled: true
+    size: 50Gi
+    storageClass: ""
+
+# ── Service ─────────────────────────────────────────────────
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+
+# ── Ingress ─────────────────────────────────────────────────
+
+ingress:
+  enabled: false
+  className: ""
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: orchestra.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: orchestra-tls
+      hosts:
+        - orchestra.example.com
+
+# ── Horizontal Pod Autoscaler ───────────────────────────────
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── Resource Limits ─────────────────────────────────────────
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "2Gi"
+    cpu: "2"
+
+# ── Persistent Storage ──────────────────────────────────────
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+
+# ── Environment Variables ───────────────────────────────────
+
+extraEnv:
+  ORCHESTRA_LOG_LEVEL: info
+  OTEL_ENABLED: "false"
+  # OTEL_EXPORTER_OTLP_ENDPOINT: "http://grafana-alloy.monitoring:4317"
+  # LANGFUSE_HOST: ""
+  # LANGFUSE_PUBLIC_KEY: ""
+  # LANGFUSE_SECRET_KEY: ""
+
+# ── Secrets (from external secret store) ────────────────────
+
+existingSecret: ""
+extraEnvSecrets: []
+
+# ── Probes ──────────────────────────────────────────────────
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+
+startupProbe:
+  httpGet:
+    path: /api/health
+    port: 8000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  failureThreshold: 30
+
+# ── Pod Disruption Budget ───────────────────────────────────
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# ── ServiceAccount ──────────────────────────────────────────
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# ── Pod Annotations ─────────────────────────────────────────
+
+podAnnotations: {}
+podLabels: {}
+
+# ── Node Selector / Tolerations / Affinity ──────────────────
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ── Prometheus Metrics ──────────────────────────────────────
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    namespace: monitoring
