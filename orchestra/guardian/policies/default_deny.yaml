@@ -1,0 +1,17 @@
+# Default Deny Policy — Global fallback
+# Matches ALL agents.  Denies everything not explicitly allowed by
+# a more specific policy.  This should always be loaded as the
+# baseline so the system is secure by default.
+---
+policy_id: "default-deny"
+version: 1
+default_action: deny
+agent_pattern: "*"
+description: "Global default-deny policy.  Blocks all actions unless explicitly allowed by a more specific policy."
+enabled: true
+tags:
+  - system
+  - default
+  - security
+rules: []
+# No rules → every check falls through to default_action: deny.

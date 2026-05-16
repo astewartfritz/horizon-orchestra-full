@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package horizon.orchestra.sandbox.v1;
+
+option go_package = "github.com/astewartfritz/horizon-orchestra/go/envd/proto;sandboxpb";
+
+// SandboxService provides sandbox lifecycle management for Horizon Orchestra.
+service SandboxService {
+  // Create provisions a new isolated sandbox environment.
+  rpc Create(CreateSandboxRequest) returns (CreateSandboxResponse);
+
+  // Destroy terminates and cleans up a sandbox.
+  rpc Destroy(DestroySandboxRequest) returns (DestroySandboxResponse);
+
+  // Exec runs a command inside a sandbox and returns the result.
+  rpc Exec(ExecRequest) returns (ExecResponse);
+
+  // ExecStream runs a command and streams stdout/stderr in real time.
+  rpc ExecStream(ExecRequest) returns (stream ExecStreamChunk);
+
+  // List returns information about all active sandboxes.
+  rpc List(ListSandboxesRequest) returns (ListSandboxesResponse);
+
+  // HealthCheck returns the health status of the sandbox service.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// CreateSandboxRequest specifies the desired sandbox configuration.
+message CreateSandboxRequest {
+  string name = 1;
+  int32 vcpus = 2;
+  int32 memory_mb = 3;
+  int32 disk_size_mb = 4;
+  bool network_enabled = 5;
+  map<string, string> environment = 6;
+  string work_dir = 7;
+  int32 timeout_sec = 8;
+  map<string, string> labels = 9;
+}
+
+// CreateSandboxResponse returns the ID of the newly created sandbox.
+message CreateSandboxResponse {
+  string sandbox_id = 1;
+  string status = 2;
+}
+
+// DestroySandboxRequest identifies the sandbox to destroy.
+message DestroySandboxRequest {
+  string sandbox_id = 1;
+  bool force = 2;
+}
+
+// DestroySandboxResponse indicates whether destruction succeeded.
+message DestroySandboxResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ExecRequest specifies a command to run in a sandbox.
+message ExecRequest {
+  string sandbox_id = 1;
+  repeated string command = 2;
+  bytes stdin = 3;
+  bool tty = 4;
+}
+
+// ExecResponse returns the full result of command execution.
+message ExecResponse {
+  int32 exit_code = 1;
+  bytes stdout = 2;
+  bytes stderr = 3;
+  int64 duration_ms = 4;
+  bool oom_killed = 5;
+  bool timed_out = 6;
+}
+
+// ExecStreamChunk is a single chunk of streaming exec output.
+message ExecStreamChunk {
+  enum Stream {
+    STDOUT = 0;
+    STDERR = 1;
+  }
+  Stream stream = 1;
+  bytes data = 2;
+  bool eof = 3;
+  // Only set on the final chunk.
+  int32 exit_code = 4;
+  int64 duration_ms = 5;
+}
+
+// ListSandboxesRequest optionally filters sandboxes by label.
+message ListSandboxesRequest {
+  map<string, string> label_selector = 1;
+}
+
+// ListSandboxesResponse contains info about matching sandboxes.
+message ListSandboxesResponse {
+  repeated SandboxInfo sandboxes = 1;
+}
+
+// SandboxInfo describes a single sandbox.
+message SandboxInfo {
+  string sandbox_id = 1;
+  string name = 2;
+  string state = 3;
+  int64 created_at = 4;  // Unix timestamp
+  int32 vcpus = 5;
+  int32 memory_mb = 6;
+  int32 pid = 7;
+  map<string, string> labels = 8;
+  string isolation = 9;  // "firecracker" or "process"
+  bool health_ok = 10;
+}
+
+// HealthCheckRequest is empty — no parameters needed.
+message HealthCheckRequest {}
+
+// HealthCheckResponse returns aggregated service health.
+message HealthCheckResponse {
+  bool healthy = 1;
+  int32 total_sandboxes = 2;
+  int32 healthy_sandboxes = 3;
+  int32 max_sandboxes = 4;
+  int64 uptime_seconds = 5;
+}

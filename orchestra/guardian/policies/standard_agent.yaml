@@ -1,0 +1,127 @@
+# Standard Agent Policy
+# Applies to all agents matching "agent-*".  Grants common
+# permissions: inference endpoints, workspace filesystem, approved
+# models, and basic memory access.
+---
+policy_id: "standard-agent"
+version: 1
+default_action: deny
+agent_pattern: "agent-*"
+description: "Standard policy for internal agents.  Allows inference, workspace access, and approved models."
+enabled: true
+tags:
+  - standard
+  - internal
+
+rules:
+  # Network: allow inference API endpoints
+  - resource: network
+    action: outbound
+    destinations:
+      - "*.moonshot.ai"
+      - "*.openrouter.ai"
+      - "*.together.xyz"
+      - "*.perplexity.ai"
+      - "*.googleapis.com"
+      - "*.openai.com"
+      - "*.anthropic.com"
+    effect: allow
+    description: "Allow inference provider endpoints"
+
+  # Network: deny all other outbound
+  - resource: network
+    action: outbound
+    effect: deny
+    description: "Block non-inference outbound traffic"
+
+  # Filesystem: read/write workspace and tmp
+  - resource: filesystem
+    action: read
+    paths:
+      - "/workspace/*"
+      - "/tmp/*"
+    effect: allow
+    description: "Allow workspace and tmp reads"
+
+  - resource: filesystem
+    action: write
+    paths:
+      - "/workspace/*"
+      - "/tmp/*"
+    effect: allow
+    description: "Allow workspace and tmp writes"
+
+  # Filesystem: block system paths
+  - resource: filesystem
+    action: "*"
+    paths:
+      - "/etc/*"
+      - "/proc/*"
+      - "/sys/*"
+      - "/dev/*"
+    effect: deny
+    description: "Block system directory access"
+
+  # Models: allow standard tier
+  - resource: model
+    action: "*"
+    allowed_models:
+      - "kimi-k2.5"
+      - "gemma-4-31b"
+      - "gemma-4-12b"
+      - "gemma-4-26b-moe"
+      - "sonar"
+    effect: allow
+    description: "Standard model tier"
+
+  # Tools: read operations always allowed
+  - resource: tool
+    action: call
+    tools:
+      - "search"
+      - "read_file"
+      - "list_files"
+      - "get_record"
+      - "query_records"
+    effect: allow
+    description: "Read-only tools"
+
+  # Tools: write operations allowed
+  - resource: tool
+    action: call
+    tools:
+      - "write_file"
+      - "create_record"
+      - "update_record"
+    effect: allow
+    description: "Write tools"
+
+  # Tools: destructive operations require approval
+  - resource: tool
+    action: call
+    tools:
+      - "delete_record"
+      - "bulk_delete"
+      - "drop_table"
+    effect: allow_with_approval
+    requires_approval: true
+    approval_timeout: 300
+    description: "Destructive tools require human approval"
+
+  # Memory: read + write
+  - resource: memory
+    action: read
+    effect: allow
+    description: "Allow memory reads"
+
+  - resource: memory
+    action: write
+    effect: allow
+    description: "Allow memory writes"
+
+  # Memory: delete requires approval
+  - resource: memory
+    action: delete
+    effect: allow_with_approval
+    requires_approval: true
+    description: "Memory deletion requires approval"

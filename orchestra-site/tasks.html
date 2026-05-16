@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Tasks — Horizon Orchestra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --font-display: 'Space Grotesk', system-ui, sans-serif;
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --bg:          #0A0A0F;
+      --surface:     #111118;
+      --surface-2:   #16161F;
+      --surface-3:   #1A1A25;
+      --border:      #1E1E2A;
+      --border-2:    #2A2A3A;
+
+      --text:        #E8E8ED;
+      --text-muted:  #8888A0;
+      --text-faint:  #45455A;
+
+      --teal:        #00D4AA;
+      --teal-dim:    #00A888;
+      --teal-glow:   rgba(0, 212, 170, 0.15);
+      --teal-glow-s: rgba(0, 212, 170, 0.08);
+      --gold:        #FFB547;
+      --gold-dim:    #CC9038;
+
+      --green:       #3DD68C;
+      --green-bg:    rgba(61, 214, 140, 0.08);
+      --green-line:  rgba(61, 214, 140, 0.25);
+      --red:         #FF5E7D;
+      --red-bg:      rgba(255, 94, 125, 0.08);
+      --red-line:    rgba(255, 94, 125, 0.25);
+      --yellow:      #FFD460;
+      --yellow-bg:   rgba(255, 212, 96, 0.08);
+      --blue:        #60A5FA;
+
+      --radius-sm: 6px;
+      --radius:    10px;
+      --radius-lg: 16px;
+
+      --sidebar-w: 320px;
+    }
+
+    html { -webkit-font-smoothing: antialiased; background: var(--bg); color: var(--text); }
+
+    body {
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.5;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────────── */
+    .topbar {
+      height: 52px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+      background: var(--surface);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .topbar-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-display);
+      font-size: 15px; font-weight: 600;
+      color: var(--text); text-decoration: none;
+    }
+    .topbar-logo svg { flex-shrink: 0; }
+    .topbar-divider { width: 1px; height: 20px; background: var(--border-2); }
+    .topbar-title { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    .topbar-spacer { flex: 1; }
+    .topbar-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--teal-glow-s);
+      border: 1px solid rgba(0,212,170,0.2);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px; font-weight: 500; color: var(--teal);
+    }
+    .topbar-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--teal);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.75); }
+    }
+
+    /* ── Main layout ─────────────────────────────────────────────────── */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sidebar-header h2 {
+      font-family: var(--font-display);
+      font-size: 13px; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.06em; flex: 1;
+    }
+    .task-count {
+      font-size: 11px; font-weight: 600;
+      background: var(--teal-glow);
+      color: var(--teal);
+      border-radius: 12px;
+      padding: 2px 8px;
+    }
+
+    .sidebar-tasks {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .sidebar-tasks::-webkit-scrollbar { width: 3px; }
+    .sidebar-tasks::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+    /* ── Task card in sidebar ────────────────────────────────────────── */
+    .task-card {
+      margin: 4px 10px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      overflow: hidden;
+    }
+    .task-card:hover { border-color: var(--border-2); background: var(--surface-3); }
+    .task-card.active {
+      border-color: rgba(0,212,170,0.4);
+      background: linear-gradient(135deg, rgba(0,212,170,0.06), var(--surface-2));
+    }
+
+    .task-card-header {
+      padding: 12px 14px 10px;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .task-status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      margin-top: 4px; flex-shrink: 0;
+    }
+    .task-status-dot.running {
+      background: var(--teal);
+      box-shadow: 0 0 8px var(--teal);
+      animation: status-pulse 1.5s ease-in-out infinite;
+    }
+    .task-status-dot.done { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .task-status-dot.pending { background: var(--text-faint); }
+    .task-status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+    @keyframes status-pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--teal); }
+      50% { opacity: 0.6; box-shadow: 0 0 16px var(--teal); }
+    }
+
+    .task-info { flex: 1; min-width: 0; }
+    .task-name {
+      font-size: 13px; font-weight: 500; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.3;
+    }
+    .task-meta {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 4px;
+    }
+    .task-arch {
+      font-size: 10px; font-weight: 600;
+      padding: 1px 6px; border-radius: 4px;
+      background: rgba(255,181,71,0.12);
+      color: var(--gold);
+      border: 1px solid rgba(255,181,71,0.2);
+    }
+    .task-time {
+      font-size: 11px; color: var(--text-faint); font-family: var(--font-mono);
+    }
+
+    /* Progress bar under header */
+    .task-progress-bar {
+      height: 2px;
+      background: var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .task-progress-fill {
+      position: absolute;
+      left: 0; top: 0; height: 100%;
+      background: linear-gradient(90deg, var(--teal-dim), var(--teal));
+      border-radius: 0 1px 1px 0;
+      transition: width 0.4s ease;
+    }
+    .task-progress-fill.shimmer {
+      background: linear-gradient(90deg, var(--teal-dim), var(--teal), var(--teal-bright), var(--teal));
+      background-size: 200% 100%;
+      animation: shimmer 1.5s linear infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+
+    /* Step list inside card */
+    .task-steps {
+      padding: 8px 14px 12px 32px;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .task-step {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .task-step.done { color: var(--text-muted); }
+    .task-step.active { color: var(--text); }
+    .task-step.pending { color: var(--text-faint); }
+
+    .step-icon {
+      width: 14px; height: 14px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-icon .check { color: var(--green); }
+    .step-icon .spin {
+      width: 11px; height: 11px;
+      border: 1.5px solid rgba(0,212,170,0.3);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .step-icon .circle {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--text-faint);
+    }
+
+    /* ── New task input ──────────────────────────────────────────────── */
+    .sidebar-input-area {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .task-input-wrap {
+      display: flex; gap: 8px; align-items: flex-end;
+    }
+    .task-input {
+      flex: 1;
+      background: var(--surface-3);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      padding: 8px 12px;
+      resize: none;
+      min-height: 36px;
+      max-height: 80px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .task-input:focus { border-color: rgba(0,212,170,0.5); }
+    .task-input::placeholder { color: var(--text-faint); }
+    .task-submit {
+      width: 32px; height: 32px;
+      border-radius: var(--radius-sm);
+      background: var(--teal);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .task-submit:hover { background: var(--teal-bright); transform: scale(1.05); }
+    .task-submit:active { transform: scale(0.97); }
+    .task-submit svg { color: #000; }
+
+    /* ── Main content area ───────────────────────────────────────────── */
+    .main-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* Task detail header */
+    .detail-header {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .detail-task-title {
+      font-family: var(--font-display);
+      font-size: 18px; font-weight: 600;
+      color: var(--text); line-height: 1.3;
+    }
+    .detail-meta {
+      display: flex; align-items: center; gap: 12px;
+      margin-top: 8px;
+    }
+    .detail-pill {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 9px; border-radius: 12px;
+      border: 1px solid;
+    }
+    .detail-pill.arch {
+      background: rgba(255,181,71,0.1);
+      color: var(--gold);
+      border-color: rgba(255,181,71,0.25);
+    }
+    .detail-pill.running {
+      background: var(--teal-glow-s);
+      color: var(--teal);
+      border-color: rgba(0,212,170,0.3);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .detail-pill.done {
+      background: var(--green-bg);
+      color: var(--green);
+      border-color: var(--green-line);
+    }
+    .detail-elapsed {
+      font-size: 12px; color: var(--text-faint);
+      font-family: var(--font-mono);
+    }
+
+    /* Tabs */
+    .detail-tabs {
+      display: flex; gap: 0;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .tab-btn {
+      padding: 10px 16px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-muted);
+      background: none; border: none; cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* Content pane */
+    .detail-content {
+      flex: 1; overflow-y: auto; padding: 24px 28px;
+    }
+    .detail-content::-webkit-scrollbar { width: 4px; }
+    .detail-content::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+
+    /* ── Event log / reasoning ───────────────────────────────────────── */
+    .event-stream { display: flex; flex-direction: column; gap: 12px; }
+
+    .event-entry {
+      display: flex; gap: 14px;
+      animation: entry-in 0.25s ease;
+    }
+    @keyframes entry-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .event-line {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 0; flex-shrink: 0;
+      padding-top: 2px;
+    }
+    .event-icon {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; flex-shrink: 0;
+    }
+    .event-icon.tool   { background: rgba(96,165,250,0.15); color: var(--blue); }
+    .event-icon.think  { background: rgba(255,212,96,0.12); color: var(--yellow); }
+    .event-icon.write  { background: var(--green-bg); color: var(--green); }
+    .event-icon.delete { background: var(--red-bg); color: var(--red); }
+    .event-icon.agent  { background: var(--teal-glow); color: var(--teal); }
+    .event-icon.info   { background: rgba(136,136,160,0.15); color: var(--text-muted); }
+    .event-connector {
+      flex: 1; width: 1px;
+      background: var(--border);
+      margin-top: 4px;
+    }
+
+    .event-body { flex: 1; min-width: 0; }
+    .event-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .event-label {
+      font-size: 12px; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .event-timestamp {
+      font-size: 11px; color: var(--text-faint);
+      font-family: var(--font-mono); margin-left: auto;
+    }
+    .event-text {
+      font-size: 13px; color: var(--text-muted); line-height: 1.6;
+    }
+    .event-text strong { color: var(--text); }
+
+    /* ── Code diff block ─────────────────────────────────────────────── */
+    .code-diff {
+      margin-top: 10px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+    }
+
+    .code-diff-header {
+      display: flex; align-items: center;
+      padding: 8px 14px;
+      background: var(--surface-3);
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+    .diff-file {
+      font-size: 12px; color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .diff-file span { color: var(--text); }
+    .diff-stats {
+      margin-left: auto;
+      display: flex; gap: 8px;
+    }
+    .diff-add { font-size: 11px; font-weight: 600; color: var(--green); }
+    .diff-del { font-size: 11px; font-weight: 600; color: var(--red); }
+
+    .diff-lines { background: var(--bg); }
+
+    .diff-line {
+      display: flex;
+      align-items: stretch;
+      position: relative;
+      overflow: hidden;
+    }
+    .diff-line.added {
+      background: var(--green-bg);
+      border-left: 3px solid var(--green);
+    }
+    .diff-line.removed {
+      background: var(--red-bg);
+      border-left: 3px solid var(--red);
+    }
+    .diff-line.context {
+      border-left: 3px solid transparent;
+    }
+    .diff-line.added   { animation: line-add    0.35s ease; }
+    .diff-line.removed { animation: line-remove 0.35s ease; }
+
+    @keyframes line-add {
+      from { opacity: 0; background: rgba(61, 214, 140, 0.25); }
+      to   { opacity: 1; background: var(--green-bg); }
+    }
+    @keyframes line-remove {
+      from { opacity: 0; background: rgba(255, 94, 125, 0.25); }
+      to   { opacity: 1; background: var(--red-bg); }
+    }
+
+    .diff-ln {
+      width: 36px; flex-shrink: 0;
+      text-align: right;
+      padding: 0 10px 0 6px;
+      font-size: 11px; color: var(--text-faint);
+      user-select: none;
+      align-self: center;
+    }
+    .diff-sigil {
+      width: 16px; flex-shrink: 0;
+      font-size: 13px; font-weight: 700;
+      color: var(--text-faint); align-self: center;
+    }
+    .diff-line.added   .diff-sigil { color: var(--green); }
+    .diff-line.removed .diff-sigil { color: var(--red); }
+    .diff-code {
+      flex: 1; padding: 1px 14px 1px 4px;
+      white-space: pre; overflow: hidden;
+      color: var(--text);
+    }
+    .diff-line.added   .diff-code { color: #a8f0d0; }
+    .diff-line.removed .diff-code { color: #ffb3c1; }
+
+    /* Syntax colors */
+    .kw   { color: #c792ea; }
+    .fn   { color: #82aaff; }
+    .str  { color: #c3e88d; }
+    .num  { color: #f78c6c; }
+    .cm   { color: var(--text-faint); font-style: italic; }
+    .tp   { color: #ffcb6b; }
+
+    /* ── Streaming cursor ────────────────────────────────────────────── */
+    .stream-cursor {
+      display: inline-block;
+      width: 2px; height: 14px;
+      background: var(--teal);
+      margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* ── Tool call pill ──────────────────────────────────────────────── */
+    .tool-call {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(96,165,250,0.1);
+      border: 1px solid rgba(96,165,250,0.2);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--blue); margin-top: 8px;
+    }
+    .tool-call .tool-arrow {
+      opacity: 0.5;
+    }
+
+    /* ── Empty / thinking states ─────────────────────────────────────── */
+    .thinking-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      background: rgba(255,212,96,0.06);
+      border: 1px solid rgba(255,212,96,0.15);
+      border-radius: var(--radius-sm);
+      margin-top: 8px;
+    }
+    .thinking-dots {
+      display: flex; gap: 4px;
+    }
+    .thinking-dots span {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--yellow);
+      animation: dot-bounce 1.2s ease-in-out infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dot-bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+    .thinking-text { font-size: 12px; color: var(--yellow); opacity: 0.8; }
+
+    /* ── Agent card (swarm sub-agent) ────────────────────────────────── */
+    .agent-spawn {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: var(--teal-glow-s);
+      border: 1px solid rgba(0,212,170,0.2);
+      border-radius: var(--radius-sm);
+      margin-top: 8px;
+    }
+    .agent-spawn-icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--teal-glow);
+      border: 1px solid rgba(0,212,170,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+    }
+    .agent-spawn-info { flex: 1; }
+    .agent-spawn-name { font-size: 12px; font-weight: 600; color: var(--teal); }
+    .agent-spawn-task { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+    .agent-spawn-status {
+      font-size: 11px; font-family: var(--font-mono);
+      color: var(--text-faint);
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────────── */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; color: var(--text-faint);
+    }
+    .empty-state-icon { font-size: 36px; opacity: 0.4; }
+    .empty-state h3 { font-size: 15px; color: var(--text-muted); font-family: var(--font-display); }
+    .empty-state p { font-size: 13px; max-width: 280px; text-align: center; line-height: 1.6; }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      :root { --sidebar-w: 100%; }
+      .workspace { flex-direction: column; }
+      .sidebar { width: 100%; height: 280px; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <a href="./index.html" class="topbar-logo">
+    <svg viewBox="0 0 32 32" width="22" height="22" fill="none">
+      <circle cx="12" cy="22" r="5.5" stroke="url(#tg)" stroke-width="1.5" fill="none"/>
+      <circle cx="12" cy="22" r="1.5" fill="#00D4AA"/>
+      <line x1="17.5" y1="22" x2="17.5" y2="7" stroke="url(#tg)" stroke-width="1.8"/>
+      <path d="M17.5 7 Q24 5 22.5 10 Q21 13.5 17.5 12" stroke="url(#tg)" stroke-width="1.5" fill="none"/>
+      <defs>
+        <linearGradient id="tg" x1="0" y1="0" x2="32" y2="32">
+          <stop offset="0%" stop-color="#00D4AA"/>
+          <stop offset="100%" stop-color="#FFB547"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    Orchestra
+  </a>
+  <div class="topbar-divider"></div>
+  <span class="topbar-title">Live Tasks</span>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-badge">
+    <div class="dot"></div>
+    <span id="activeCount">2 running</span>
+  </div>
+</header>
+
+<!-- Main workspace -->
+<div class="workspace">
+
+  <!-- Sidebar: task list -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Tasks</h2>
+      <span class="task-count" id="taskCount">3</span>
+    </div>
+
+    <div class="sidebar-tasks" id="taskList">
+      <!-- Tasks injected by JS -->
+    </div>
+
+    <div class="sidebar-input-area">
+      <div class="task-input-wrap">
+        <textarea class="task-input" id="taskInput" rows="1"
+          placeholder="Describe a new task…"></textarea>
+        <button class="task-submit" id="taskSubmit" aria-label="Start task">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1L7 13M1 7L13 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main: task detail -->
+  <main class="main-panel" id="mainPanel">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-state-icon">◎</div>
+      <h3>Select a task</h3>
+      <p>Choose a running task from the sidebar, or start a new one below.</p>
+    </div>
+
+    <div id="taskDetail" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+      <div class="detail-header">
+        <div class="detail-task-title" id="detailTitle">—</div>
+        <div class="detail-meta">
+          <span class="detail-pill arch" id="detailArch">Arch A</span>
+          <span class="detail-pill running" id="detailStatus">
+            <span class="dot" style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse-dot 2s ease-in-out infinite;"></span>
+            Running
+          </span>
+          <span class="detail-elapsed" id="detailElapsed">0:00</span>
+        </div>
+      </div>
+      <div class="detail-tabs">
+        <button class="tab-btn active" data-tab="log">Activity</button>
+        <button class="tab-btn" data-tab="diff">Code Changes</button>
+        <button class="tab-btn" data-tab="agents">Sub-agents</button>
+      </div>
+      <div class="detail-content" id="detailContent">
+        <div class="event-stream" id="eventStream"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// Data model
+// ─────────────────────────────────────────────────────────────────────────────
+const TASKS = [
+  {
+    id: 't1',
+    name: 'Build a financial dashboard for AAPL',
+    arch: 'Arch C', archClass: 'c',
+    status: 'running',
+    progress: 62,
+    startedAt: Date.now() - 47000,
+    steps: [
+      { label: 'Plan workflow', done: true },
+      { label: 'Fetch AAPL market data', done: true },
+      { label: 'Generate chart components', done: false, active: true },
+      { label: 'Build HTML dashboard', done: false },
+      { label: 'Deploy to CDN', done: false },
+    ],
+    log: [],
+    diffs: [],
+    agents: [],
+  },
+  {
+    id: 't2',
+    name: 'Research Kimi K2.5 architecture and write a summary',
+    arch: 'Arch B', archClass: 'b',
+    status: 'running',
+    progress: 88,
+    startedAt: Date.now() - 102000,
+    steps: [
+      { label: 'Expand search queries', done: true },
+      { label: 'Parallel Sonar retrieval', done: true },
+      { label: 'Passage ranking', done: true },
+      { label: 'Kimi synthesis', done: false, active: true },
+    ],
+    log: [],
+    diffs: [],
+    agents: [],
+  },
+  {
+    id: 't3',
+    name: 'Refactor authentication module',
+    arch: 'Arch A', archClass: 'a',
+    status: 'done',
+    progress: 100,
+    startedAt: Date.now() - 310000,
+    steps: [
+      { label: 'Read existing auth.py', done: true },
+      { label: 'Identify issues', done: true },
+      { label: 'Write refactored code', done: true },
+      { label: 'Run tests', done: true },
+    ],
+    log: [],
+    diffs: [],
+    agents: [],
+  }
+];
+
+// Pre-populate log events for task 1
+TASKS[0].log = [
+  { type: 'agent', label: 'Orchestrator', ts: '0:02', text: 'Spawning 4 sub-agents in parallel: <strong>data-fetcher</strong>, <strong>chart-builder</strong>, <strong>layout-agent</strong>, <strong>deploy-agent</strong>.' },
+  { type: 'tool', label: 'Tool Call', ts: '0:04', text: 'Executing <code>fetch_market_data</code>', tool: { name: 'fetch_market_data', args: 'symbol="AAPL", period="1y", interval="1d"' } },
+  { type: 'think', label: 'Reasoning', ts: '0:09', text: 'AAPL data received. 252 trading days. Planning chart types: candlestick + volume bars + RSI indicator.', thinking: true },
+  { type: 'write', label: 'Write', ts: '0:14', text: 'Created <strong>dashboard/charts.py</strong> (+87 lines)' },
+  { type: 'write', label: 'Write', ts: '0:18', text: 'Created <strong>dashboard/layout.html</strong> (+124 lines)' },
+  { type: 'tool', label: 'Tool Call', ts: '0:23', text: 'Executing <code>run_python</code> — rendering charts to SVG', tool: { name: 'run_python', args: 'script="dashboard/charts.py"' } },
+  { type: 'info', label: 'Progress', ts: '0:31', text: 'Charts rendered successfully. Candlestick (1y), volume, RSI(14), MACD ready.' },
+  { type: 'write', label: 'Edit', ts: '0:38', text: 'Editing <strong>dashboard/layout.html</strong> — wiring chart data' },
+];
+
+TASKS[0].diffs = [
+  {
+    file: 'dashboard/charts.py',
+    adds: 87, dels: 0,
+    lines: [
+      { type: 'added', ln: 1, code: '<span class="kw">import</span> pandas <span class="kw">as</span> pd' },
+      { type: 'added', ln: 2, code: '<span class="kw">import</span> plotly.graph_objects <span class="kw">as</span> go' },
+      { type: 'added', ln: 3, code: '' },
+      { type: 'added', ln: 4, code: '<span class="kw">def</span> <span class="fn">build_candlestick</span>(df: pd.DataFrame) -> go.Figure:' },
+      { type: 'added', ln: 5, code: '    <span class="cm"># OHLCV candlestick with volume overlay</span>' },
+      { type: 'added', ln: 6, code: '    fig = go.Figure()' },
+      { type: 'added', ln: 7, code: '    fig.add_trace(go.Candlestick(' },
+      { type: 'added', ln: 8, code: '        x=df[<span class="str">\'Date\'</span>], open=df[<span class="str">\'Open\'</span>],' },
+      { type: 'added', ln: 9, code: '        high=df[<span class="str">\'High\'</span>], low=df[<span class="str">\'Low\'</span>],' },
+      { type: 'added', ln: 10, code: '        close=df[<span class="str">\'Close\'</span>], name=<span class="str">\'AAPL\'</span>' },
+      { type: 'added', ln: 11, code: '    ))' },
+      { type: 'added', ln: 12, code: '    <span class="kw">return</span> fig' },
+    ]
+  },
+  {
+    file: 'dashboard/layout.html',
+    adds: 3, dels: 2,
+    lines: [
+      { type: 'context', ln: 14, code: '  &lt;div class=<span class="str">"dashboard-grid"</span>&gt;' },
+      { type: 'removed', ln: 15, code: '    &lt;div id=<span class="str">"chart-placeholder"</span>&gt;Loading...&lt;/div&gt;' },
+      { type: 'removed', ln: 16, code: '    &lt;!-- TODO: wire chart data --&gt;' },
+      { type: 'added', ln: 15, code: '    &lt;div id=<span class="str">"candlestick-chart"</span>&gt;&lt;/div&gt;' },
+      { type: 'added', ln: 16, code: '    &lt;div id=<span class="str">"volume-chart"</span>&gt;&lt;/div&gt;' },
+      { type: 'added', ln: 17, code: '    &lt;div id=<span class="str">"rsi-chart"</span>&gt;&lt;/div&gt;' },
+      { type: 'context', ln: 18, code: '  &lt;/div&gt;' },
+    ]
+  }
+];
+
+TASKS[0].agents = [
+  { icon: '📊', name: 'data-fetcher',   task: 'Fetch AAPL OHLCV, earnings, analyst ratings', status: 'done',    elapsed: '0:08' },
+  { icon: '📈', name: 'chart-builder',  task: 'Render candlestick, volume, RSI, MACD charts',  status: 'active',  elapsed: '0:31' },
+  { icon: '🎨', name: 'layout-agent',   task: 'Build responsive HTML/CSS layout',              status: 'active',  elapsed: '0:20' },
+  { icon: '🚀', name: 'deploy-agent',   task: 'CDN deployment, generate share URL',            status: 'pending', elapsed: '—' },
+];
+
+// Pre-populate task 2
+TASKS[1].log = [
+  { type: 'think', label: 'Planning', ts: '0:01', text: 'Expanding query into 5 search variants for broader coverage.' },
+  { type: 'tool', label: 'Tool Call', ts: '0:03', text: 'Parallel Sonar retrieval — 5 queries simultaneous', tool: { name: 'sonar_search_batch', args: 'queries=[...5 queries...]' } },
+  { type: 'info', label: 'Retrieval', ts: '0:12', text: '47 passages retrieved across 8 sources. Deduplication removed 12 overlapping.' },
+  { type: 'think', label: 'Ranking',  ts: '0:15', text: 'Ranking 35 passages by relevance. Top passage score: 0.97.' },
+  { type: 'agent', label: 'Synthesis', ts: '0:18', text: 'Kimi K2.5 Thinking mode engaged. Building synthesis with inline citations [1]–[8].<span class="stream-cursor"></span>' },
+];
+
+// Pre-populate task 3 (done)
+TASKS[2].log = [
+  { type: 'tool', label: 'Tool Call', ts: '0:01', text: 'Reading <code>orchestra/auth.py</code>', tool: { name: 'read_file', args: 'path="orchestra/auth.py"' } },
+  { type: 'think', label: 'Analysis', ts: '0:04', text: 'Found 3 issues: hardcoded token TTL, missing refresh rotation, bcrypt cost factor at 10 (low).' },
+  { type: 'write', label: 'Edit', ts: '0:08', text: 'Editing <strong>orchestra/auth.py</strong> — 4 changes' },
+  { type: 'tool', label: 'Tool Call', ts: '0:14', text: 'Running tests', tool: { name: 'run_tests', args: 'path="tests/test_auth.py"' } },
+  { type: 'info', label: 'Tests', ts: '0:18', text: '✓ 14/14 tests pass. Auth module hardened.' },
+];
+TASKS[2].diffs = [
+  {
+    file: 'orchestra/auth.py',
+    adds: 6, dels: 4,
+    lines: [
+      { type: 'context', ln: 22, code: '<span class="cm"># Token configuration</span>' },
+      { type: 'removed', ln: 23, code: 'TOKEN_TTL = <span class="num">3600</span>  <span class="cm"># 1 hour hardcoded</span>' },
+      { type: 'removed', ln: 24, code: 'BCRYPT_ROUNDS = <span class="num">10</span>' },
+      { type: 'removed', ln: 25, code: 'REFRESH_ROTATION = <span class="kw">False</span>' },
+      { type: 'added', ln: 23, code: 'TOKEN_TTL = <span class="kw">int</span>(os.getenv(<span class="str">"TOKEN_TTL_SECONDS"</span>, <span class="num">3600</span>))' },
+      { type: 'added', ln: 24, code: 'BCRYPT_ROUNDS = <span class="kw">int</span>(os.getenv(<span class="str">"BCRYPT_ROUNDS"</span>, <span class="num">12</span>))' },
+      { type: 'added', ln: 25, code: 'REFRESH_ROTATION = os.getenv(<span class="str">"REFRESH_ROTATION"</span>, <span class="str">"true"</span>).lower() == <span class="str">"true"</span>' },
+      { type: 'added', ln: 26, code: '' },
+      { type: 'added', ln: 27, code: '<span class="cm"># Rotate refresh tokens on every use (prevents replay attacks)</span>' },
+      { type: 'context', ln: 28, code: '<span class="kw">def</span> <span class="fn">create_token</span>(user_id: <span class="tp">str</span>) -> <span class="tp">str</span>:' },
+    ]
+  }
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+let activeTaskId = null;
+let activeTab = 'log';
+let elapsedInterval = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render sidebar task list
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('taskList');
+  list.innerHTML = '';
+  const running = TASKS.filter(t => t.status === 'running').length;
+  document.getElementById('activeCount').textContent = `${running} running`;
+  document.getElementById('taskCount').textContent = TASKS.length;
+
+  TASKS.forEach(task => {
+    const card = document.createElement('div');
+    card.className = `task-card${task.id === activeTaskId ? ' active' : ''}`;
+    card.dataset.taskId = task.id;
+
+    const doneSteps = task.steps.filter(s => s.done).length;
+    const fillClass = task.status === 'running' ? 'shimmer' : '';
+
+    card.innerHTML = `
+      <div class="task-card-header">
+        <div class="task-status-dot ${task.status}"></div>
+        <div class="task-info">
+          <div class="task-name">${task.name}</div>
+          <div class="task-meta">
+            <span class="task-arch">${task.arch}</span>
+            <span class="task-time">${formatElapsed(task.startedAt)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="task-progress-bar">
+        <div class="task-progress-fill ${fillClass}" style="width:${task.progress}%"></div>
+      </div>
+      <div class="task-steps">
+        ${task.steps.map(step => `
+          <div class="task-step ${step.done ? 'done' : step.active ? 'active' : 'pending'}">
+            <div class="step-icon">
+              ${step.done
+                ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#3DD68C" stroke-width="1.8" stroke-linecap="round"/></svg>'
+                : step.active
+                  ? '<div class="spin"></div>'
+                  : '<div class="circle"></div>'}
+            </div>
+            ${step.label}
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    card.addEventListener('click', () => selectTask(task.id));
+    list.appendChild(card);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Select + render task detail
+// ─────────────────────────────────────────────────────────────────────────────
+function selectTask(id) {
+  activeTaskId = id;
+  const task = TASKS.find(t => t.id === id);
+  if (!task) return;
+
+  document.getElementById('emptyState').style.display = 'none';
+  const detail = document.getElementById('taskDetail');
+  detail.style.display = 'flex';
+
+  document.getElementById('detailTitle').textContent = task.name;
+  document.getElementById('detailArch').textContent = task.arch;
+
+  const statusEl = document.getElementById('detailStatus');
+  if (task.status === 'done') {
+    statusEl.className = 'detail-pill done';
+    statusEl.innerHTML = '✓ Completed';
+  } else {
+    statusEl.className = 'detail-pill running';
+    statusEl.innerHTML = `<span class="dot" style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse-dot 2s ease-in-out infinite;"></span> Running`;
+  }
+
+  renderSidebar();
+  renderTab(activeTab, task);
+  startElapsedTimer(task);
+}
+
+function renderTab(tab, task) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  const content = document.getElementById('detailContent');
+  if (tab === 'log') renderLog(content, task);
+  else if (tab === 'diff') renderDiff(content, task);
+  else if (tab === 'agents') renderAgents(content, task);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render log / activity
+// ─────────────────────────────────────────────────────────────────────────────
+function renderLog(container, task) {
+  if (!task.log.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px 0"><div class="empty-state-icon">⏳</div><p>No activity yet.</p></div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="event-stream" id="eventStream"></div>';
+  const stream = container.querySelector('#eventStream');
+
+  task.log.forEach((ev, i) => {
+    setTimeout(() => appendEvent(stream, ev, i === task.log.length - 1), i * 60);
+  });
+}
+
+function appendEvent(stream, ev, isLast) {
+  const entry = document.createElement('div');
+  entry.className = 'event-entry';
+
+  let toolHTML = '';
+  if (ev.tool) {
+    toolHTML = `<div class="tool-call">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 3V2a2 2 0 014 0v1" stroke="currentColor" stroke-width="1.2"/></svg>
+      <strong>${ev.tool.name}</strong><span class="tool-arrow">→</span><span style="opacity:.65">${ev.tool.args}</span>
+    </div>`;
+  }
+
+  let thinkHTML = '';
+  if (ev.thinking && isLast) {
+    thinkHTML = `<div class="thinking-bar">
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
+      <span class="thinking-text">Synthesizing…</span>
+    </div>`;
+  }
+
+  entry.innerHTML = `
+    <div class="event-line">
+      <div class="event-icon ${ev.type}">${iconFor(ev.type)}</div>
+      ${!isLast ? '<div class="event-connector"></div>' : ''}
+    </div>
+    <div class="event-body">
+      <div class="event-header">
+        <span class="event-label">${ev.label}</span>
+        <span class="event-timestamp">${ev.ts}</span>
+      </div>
+      <div class="event-text">${ev.text}${toolHTML}${thinkHTML}</div>
+    </div>
+  `;
+  stream.appendChild(entry);
+  entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function iconFor(type) {
+  return { tool:'⚙', think:'◈', write:'✎', delete:'✕', agent:'◎', info:'◉' }[type] || '·';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render code diff
+// ─────────────────────────────────────────────────────────────────────────────
+function renderDiff(container, task) {
+  if (!task.diffs.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px 0"><div class="empty-state-icon">📄</div><p>No code changes yet.</p></div>';
+    return;
+  }
+
+  container.innerHTML = task.diffs.map((diff, di) => `
+    <div class="code-diff" style="margin-bottom:20px">
+      <div class="code-diff-header">
+        <span class="diff-file"><span>${diff.file}</span></span>
+        <div class="diff-stats">
+          <span class="diff-add">+${diff.adds}</span>
+          <span class="diff-del">${diff.dels > 0 ? '−'+diff.dels : ''}</span>
+        </div>
+      </div>
+      <div class="diff-lines" id="diff-${di}"></div>
+    </div>
+  `).join('');
+
+  task.diffs.forEach((diff, di) => {
+    const linesEl = document.getElementById(`diff-${di}`);
+    diff.lines.forEach((line, li) => {
+      setTimeout(() => {
+        const row = document.createElement('div');
+        row.className = `diff-line ${line.type}`;
+        row.innerHTML = `
+          <span class="diff-ln">${line.ln || ''}</span>
+          <span class="diff-sigil">${line.type === 'added' ? '+' : line.type === 'removed' ? '−' : ' '}</span>
+          <span class="diff-code">${line.code}</span>
+        `;
+        linesEl.appendChild(row);
+      }, (di * 200) + (li * 40));
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render agents tab
+// ─────────────────────────────────────────────────────────────────────────────
+function renderAgents(container, task) {
+  if (!task.agents.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px 0"><div class="empty-state-icon">🤖</div><p>Single-agent task.</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${task.agents.map(ag => `
+        <div class="agent-spawn">
+          <div class="agent-spawn-icon">${ag.icon}</div>
+          <div class="agent-spawn-info">
+            <div class="agent-spawn-name">${ag.name}</div>
+            <div class="agent-spawn-task">${ag.task}</div>
+          </div>
+          <div class="agent-spawn-status">${ag.status === 'done' ? '✓ ' : ag.status === 'active' ? '⟳ ' : '· '}${ag.elapsed}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Elapsed timer
+// ─────────────────────────────────────────────────────────────────────────────
+function formatElapsed(startedAt) {
+  const s = Math.floor((Date.now() - startedAt) / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function startElapsedTimer(task) {
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  const el = document.getElementById('detailElapsed');
+  const update = () => { if (task.status === 'running') el.textContent = formatElapsed(task.startedAt); };
+  update();
+  if (task.status === 'running') elapsedInterval = setInterval(update, 1000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tabs
+// ─────────────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const task = TASKS.find(t => t.id === activeTaskId);
+    if (task) renderTab(btn.dataset.tab, task);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New task submission
+// ─────────────────────────────────────────────────────────────────────────────
+function submitTask(text) {
+  if (!text.trim()) return;
+  const id = 't' + Date.now();
+  const archs = ['Arch A','Arch B','Arch C','Arch D'];
+  const arch = archs[Math.floor(Math.random() * 3)];
+  const newTask = {
+    id, name: text.trim(), arch,
+    status: 'running', progress: 0,
+    startedAt: Date.now(),
+    steps: [
+      { label: 'Planning workflow', done: false, active: true },
+      { label: 'Execute task', done: false },
+      { label: 'Validate output', done: false },
+    ],
+    log: [
+      { type: 'agent', label: 'Orchestrator', ts: '0:00', text: `Starting task on <strong>${arch}</strong>. Analyzing intent…` }
+    ],
+    diffs: [], agents: [],
+  };
+  TASKS.unshift(newTask);
+  renderSidebar();
+  selectTask(id);
+  document.getElementById('taskInput').value = '';
+
+  // Simulate progress
+  simulateTaskProgress(id);
+}
+
+function simulateTaskProgress(id) {
+  const task = TASKS.find(t => t.id === id);
+  if (!task) return;
+
+  const events = [
+    { delay: 1500, fn: () => {
+      task.progress = 15;
+      task.steps[0].done = true; task.steps[0].active = false;
+      task.steps[1].active = true;
+      task.log.push({ type: 'think', label: 'Reasoning', ts: '0:01', text: 'Breaking task into subtasks. Selecting tools.' });
+    }},
+    { delay: 3500, fn: () => {
+      task.progress = 40;
+      task.log.push({ type: 'tool', label: 'Tool Call', ts: '0:03', text: 'Executing primary tool', tool: { name: 'execute_task', args: `task="${task.name.slice(0,40)}…"` } });
+    }},
+    { delay: 6000, fn: () => {
+      task.progress = 70;
+      task.steps[1].done = true; task.steps[1].active = false;
+      task.steps[2].active = true;
+      task.log.push({ type: 'write', label: 'Write', ts: '0:06', text: 'Output generated successfully.' });
+    }},
+    { delay: 8500, fn: () => {
+      task.progress = 100; task.status = 'done';
+      task.steps[2].done = true; task.steps[2].active = false;
+      task.log.push({ type: 'info', label: 'Complete', ts: '0:08', text: '✓ Task completed successfully.' });
+    }},
+  ];
+
+  events.forEach(({ delay, fn }) => {
+    setTimeout(() => {
+      fn();
+      renderSidebar();
+      if (activeTaskId === id) renderTab(activeTab, task);
+    }, delay);
+  });
+}
+
+document.getElementById('taskSubmit').addEventListener('click', () => {
+  submitTask(document.getElementById('taskInput').value);
+});
+document.getElementById('taskInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitTask(e.target.value); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init — live progress simulation
+// ─────────────────────────────────────────────────────────────────────────────
+renderSidebar();
+
+// Auto-select task 1
+setTimeout(() => selectTask('t1'), 100);
+
+// Simulate task 1 completing
+setTimeout(() => {
+  const task = TASKS[0];
+  task.steps[2].done = true; task.steps[2].active = false;
+  task.steps[3].active = true;
+  task.progress = 78;
+  task.log.push({ type: 'write', label: 'Write', ts: '0:45', text: 'Completed <strong>dashboard/charts.py</strong>. Starting layout…<span class="stream-cursor"></span>' });
+  renderSidebar();
+  if (activeTaskId === 't1') renderTab(activeTab, TASKS[0]);
+}, 4000);
+
+setTimeout(() => {
+  const task = TASKS[0];
+  task.progress = 95;
+  task.steps[3].done = true; task.steps[3].active = false;
+  task.steps[4].active = true;
+  task.log.push({ type: 'tool', label: 'Tool Call', ts: '0:58', text: 'Deploying to CDN', tool: { name: 'deploy_static', args: 'path="dashboard/", cdn="cloudfront"' } });
+  renderSidebar();
+  if (activeTaskId === 't1') renderTab(activeTab, TASKS[0]);
+}, 9000);
+
+setTimeout(() => {
+  const task = TASKS[0];
+  task.progress = 100; task.status = 'done';
+  task.steps[4].done = true; task.steps[4].active = false;
+  task.log.push({ type: 'info', label: 'Complete', ts: '1:04', text: '✓ Dashboard deployed. <strong>https://dashboard.horizon-orchestra.com/aapl</strong>' });
+  renderSidebar();
+  if (activeTaskId === 't1') renderTab(activeTab, TASKS[0]);
+}, 13000);
+
+// Periodic sidebar refresh for elapsed times
+setInterval(renderSidebar, 5000);
+</script>
+</body>
+</html>

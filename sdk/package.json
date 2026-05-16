@@ -1,0 +1,35 @@
+{
+  "name": "@horizon-orchestra/sdk",
+  "version": "0.1.0",
+  "description": "Type-safe TypeScript SDK for Horizon Orchestra API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/horizon-orchestra/sdk"
+  },
+  "keywords": [
+    "horizon",
+    "orchestra",
+    "sdk",
+    "typescript",
+    "api-client"
+  ]
+}

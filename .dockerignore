@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+.git
+.github
+.mypy_cache
+.ruff_cache
+.pytest_cache
+node_modules
+sdk/node_modules
+node/node_modules
+dist
+*.egg-info
+.env*
+.DS_Store
+tests/
+*.md
+!ORCHESTRA.md

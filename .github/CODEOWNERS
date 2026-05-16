@@ -1,0 +1,21 @@
+# CODEOWNERS — Horizon Orchestra
+# All code is owned by Ashton Fritz.
+# Every file in every directory requires his review.
+
+* @astewartfritz
+
+# Core orchestration
+/orchestra/ @astewartfritz
+
+# Security-critical modules — extra protection
+/orchestra/security/ @astewartfritz
+/orchestra/billing/ @astewartfritz
+/orchestra/auth.py @astewartfritz
+/orchestra/trust.py @astewartfritz
+/orchestra/red_team/ @astewartfritz
+
+# Infrastructure
+/Dockerfile @astewartfritz
+/docker-compose.yml @astewartfritz
+/.github/ @astewartfritz
+/scripts/ @astewartfritz
