@@ -1,8 +1,9 @@
 """Horizon Orchestra — Agentic AI Harness.
 
-Built on Kimi K2.5 as the core backbone, with multi-model routing,
-parallel sub-agent swarms, Perplexity API integration, and persistent
-cross-session memory.
+Multi-model orchestration framework with Kimi K2.5, Gemma 4, and
+Claude Opus 4.6 as backbone models, plus Perplexity Sonar for web
+search, unified speech/audio pipelines, 5-layer security middleware,
+domain-aware routing, and persistent cross-session memory.
 
 Quick start::
 
@@ -10,14 +11,17 @@ Quick start::
 
     router = ModelRouter()
     tools  = create_default_tools(router)
-    config = AgentConfig(model="kimi-k2.5")
+    config = AgentConfig(model="claude-opus-4.6-openrouter")
     agent  = AgentLoop(router, tools, config)
 
     async for event in agent.run("Build a REST API for task management"):
         print(event)
 """
 
-from .router import ModelConfig, ModelRouter, DEFAULT_MODELS, GEMMA4_MODELS
+# ── Router ──────────────────────────────────────────────────────────────────
+from .router import ModelConfig, ModelRouter, DEFAULT_MODELS
+
+# ── Agent Loop ──────────────────────────────────────────────────────────────
 from .agent_loop import (
     AgentConfig,
     AgentEvent,
@@ -31,13 +35,19 @@ from .agent_loop import (
     ThinkingEvent,
     create_default_tools,
 )
+
+# ── Swarm primitives ────────────────────────────────────────────────────────
 from .swarm import SubTask, SwarmCoordinator, SwarmResult
+
+# ── Perplexity ──────────────────────────────────────────────────────────────
 from .perplexity import (
     AgentResponse,
     PerplexityAgent,
     PerplexitySearch,
     SearchResult,
 )
+
+# ── Memory ──────────────────────────────────────────────────────────────────
 from .memory import (
     MemoryEntry,
     MemoryManager,
@@ -45,129 +55,247 @@ from .memory import (
     SessionContext,
     register_memory_tools,
 )
+
+# ── Architectures ───────────────────────────────────────────────────────────
 from .arch_a import MonolithicAgent, MonolithicConfig
-from .arch_b import RAGPipeline, RAGConfig
 from .arch_c import SwarmAgent, SwarmConfig
-from .arch_d import MCPToolHub, MCPHubConfig
 from .arch_e import ProductionOrchestrator, ProductionConfig
 
-# ── Enterprise connectors (big 5 platforms) ───────────────────────────────
-try:
-    from .connectors.salesforce       import SalesforceConnector
-    from .connectors.google_workspace  import GoogleWorkspaceConnector
-    from .connectors.microsoft365      import Microsoft365Connector
-    from .connectors.meta_business     import MetaBusinessConnector
-    from .connectors.amazon_business   import AmazonBusinessConnector
-except Exception:
-    SalesforceConnector = GoogleWorkspaceConnector = Microsoft365Connector = None  # type: ignore
-    MetaBusinessConnector = AmazonBusinessConnector = None  # type: ignore
+# ── Gemma 4 Provider ────────────────────────────────────────────────────────
+from .gemma4_provider import (
+    Gemma4Provider,
+    Gemma4Config,
+    ThinkingResponse as Gemma4ThinkingResponse,
+    MultimodalInput,
+    Gemma4FunctionCall,
+    generate_ollama_modelfile,
+    generate_vllm_command,
+)
 
-# ── Multi-orchestrator teams + fleet + mesh ─────────────────────────────
+# ── Opus 4.6 Provider ──────────────────────────────────────────────────────
 try:
-    from .teams import (
-        OrchestraTeam, TeamConfig, ContextBus, TeamMemory, InterAgentTrust,
-        OrchestraFleet, FleetConfig,
-        AgentNegotiator, TaskBid, NegotiationResult,
-        OrchestratorMesh, MeshNode, MeshConfig,
+    from .opus4_provider import (
+        Opus4Provider,
+        Opus4Config,
+        ThinkingResponse as Opus4ThinkingResponse,
+        VisionInput,
+        Opus4FunctionCall,
+        get_effort_config,
+        estimate_cost as estimate_opus4_cost,
     )
-    from .teams.pre_built_teams import (
-        enterprise_connect_team, coding_team, research_team, sales_team
-    )
-except Exception:
-    OrchestraTeam = TeamConfig = ContextBus = TeamMemory = InterAgentTrust = None  # type: ignore
-    OrchestraFleet = FleetConfig = AgentNegotiator = TaskBid = NegotiationResult = None  # type: ignore
-    OrchestratorMesh = MeshNode = MeshConfig = None  # type: ignore
-    enterprise_connect_team = coding_team = research_team = sales_team = None  # type: ignore
-
-# ── Security guardian (full stack) ────────────────────────────────────
-try:
-    from .guardian import (
-        InferenceGateway, PolicyEngine,
-        CapabilityLattice, AuditLedger, BeyondGuardrails,
-    )
-    from .guardian.code_guard import CodeGuard, CodeThreat, CodeScanResult
-    from .guardian.ingestion_gate import IngestionGate, IngestionViolation, IngestionReport
-    from .guardian.security_config import SecurityConfig, SECURITY_CONFIG
-except Exception:
-    InferenceGateway = PolicyEngine = CapabilityLattice = None  # type: ignore
-    AuditLedger = BeyondGuardrails = None  # type: ignore
-    CodeGuard = CodeThreat = CodeScanResult = None  # type: ignore
-    IngestionGate = IngestionViolation = IngestionReport = None  # type: ignore
-    SecurityConfig = SECURITY_CONFIG = None  # type: ignore
-
-# Gemma 4 provider (lazy — only if available)
-try:
-    from .gemma4_provider import (
-        Gemma4Provider,
-        Gemma4Config,
-        MultimodalInput,
-        Gemma4FunctionCall,
-        generate_ollama_modelfile,
-        generate_vllm_command,
-    )
-    from .gemma4_provider import ThinkingResponse as Gemma4ThinkingResponse  # test alias
-except Exception:
-    Gemma4Provider = None  # type: ignore[assignment,misc]
-    Gemma4Config = None  # type: ignore[assignment,misc]
-    Gemma4ThinkingResponse = None  # type: ignore[assignment,misc]
-    MultimodalInput = None  # type: ignore[assignment,misc]
-    Gemma4FunctionCall = None  # type: ignore[assignment,misc]
-    generate_ollama_modelfile = None  # type: ignore[assignment]
-    generate_vllm_command = None  # type: ignore[assignment]
-
-# Internal helpers used by tests via direct import from orchestra.arch_a
-# These live in arch_a but tests import them as orchestra._thinking_block etc.
-try:
-    from .arch_a import _thinking_block, _model_display_name  # type: ignore[attr-defined]
 except ImportError:
-    def _thinking_block(text: str = "") -> str:  # type: ignore[misc]
-        return f"<thinking>{text}</thinking>"
-    def _model_display_name(model_id: str = "") -> str:  # type: ignore[misc]
-        return model_id
+    pass  # anthropic SDK not installed
+
+# ── Security ────────────────────────────────────────────────────────────────
+try:
+    from .security import (
+        SecurityMiddleware,
+        PermissionPolicy,
+        PermissionGate,
+        InputSanitizer,
+        OutputMonitor,
+        RateLimiter,
+        SecurityAlert,
+        SecurityDecision,
+        strict_policy,
+        standard_policy,
+        permissive_policy,
+        safety_critical_policy,
+    )
+except ImportError:
+    pass
+
+# ── Domain Router ───────────────────────────────────────────────────────────
+try:
+    from .domain_router import (
+        DomainRouter,
+        TaskClassification,
+        DomainRoute,
+        DOMAIN_CONFIGS,
+    )
+except ImportError:
+    pass
+
+# ── Speech & Audio ──────────────────────────────────────────────────────────
+try:
+    from .speech_provider import (
+        SpeechProvider,
+        STTConfig,
+        TTSConfig,
+        STTBackend,
+        TTSBackend,
+        AudioFormat,
+        TranscriptionResult,
+        TTSResult,
+    )
+    from .audio_tools import register_audio_tools
+except ImportError:
+    pass  # speech deps not installed
+
+# ── Browser Connector ────────────────────────────────────────────────────────────────────────────
+try:
+    from .browser_connector import (
+        BrowserConnector,
+        BrowserSession,
+        BrowserConfig,
+        PageState,
+    )
+except ImportError:
+    pass  # playwright not installed
+
+# ── Billing ─────────────────────────────────────────────────────────────────
+try:
+    from .stripe_billing import (
+        BillingManager,
+        NullBillingManager,
+        PricingTier,
+        UsageType,
+        Customer,
+        UsageSummary,
+        BillingEvent,
+    )
+    from .usage_tracker import (
+        UsageTracker,
+        NullUsageTracker,
+        UsageBudget,
+        UsageSnapshot,
+        TIER_LIMITS,
+    )
+except ImportError:
+    pass
+
+# ── Tasks ────────────────────────────────────────────────────────────────────
+try:
+    from .tasks import (
+        TaskManager,
+        TaskSpec,
+        TaskStore,
+        Task,
+        TaskStatus,
+        TaskPriority,
+        Schedule,
+        CheckIn,
+        FileSystemIPC,
+    )
+except ImportError:
+    pass
+
+# ── Skills ───────────────────────────────────────────────────────────────────
+try:
+    from .skills import (
+        Skill,
+        SkillMatch,
+        SkillChain,
+        SkillRegistry,
+        SkillLoader,
+        SkillActivator,
+        parse_skill_md,
+        match_skills,
+    )
+except ImportError:
+    pass
+
+# ── Model Council ────────────────────────────────────────────────────────────
+try:
+    from .model_council import (
+        ModelCouncil,
+        CouncilConfig,
+        CouncilResult,
+        ModelVote,
+        register_council_tools,
+    )
+except ImportError:
+    pass
+
+# ── Rate-Limit Middleware ────────────────────────────────────────────────────
+try:
+    from .middleware import (
+        RateLimitMiddleware,
+        RateLimitDecision,
+        RateLimitOptions,
+        OrchestraMiddleware,
+        AuditSink,
+        CircuitBreaker,
+        BreakerState,
+        LocalTokenBucket,
+    )
+except ImportError:
+    pass
+
+# ── Citation ─────────────────────────────────────────────────────────────────
+try:
+    from .citation import (
+        CitationTracker,
+        CitationMiddleware,
+        CitationEnforcer,
+        GroundedResponse,
+        Source,
+        Citation,
+        auto_ground,
+    )
+except ImportError:
+    pass
 
 __all__ = [
     # router
-    "ModelConfig",
-    "ModelRouter",
-    "DEFAULT_MODELS",
+    "ModelConfig", "ModelRouter", "DEFAULT_MODELS",
     # agent loop
-    "AgentConfig",
-    "AgentEvent",
-    "AgentLoop",
-    "FinalAnswerEvent",
-    "ErrorEvent",
-    "ToolCallEvent",
-    "ToolRegistry",
-    "ToolResult",
-    "ToolResultEvent",
-    "ThinkingEvent",
+    "AgentConfig", "AgentEvent", "AgentLoop",
+    "FinalAnswerEvent", "ErrorEvent", "ToolCallEvent",
+    "ToolRegistry", "ToolResult", "ToolResultEvent", "ThinkingEvent",
     "create_default_tools",
     # swarm
-    "SubTask",
-    "SwarmCoordinator",
-    "SwarmResult",
+    "SubTask", "SwarmCoordinator", "SwarmResult",
     # perplexity
-    "AgentResponse",
-    "PerplexityAgent",
-    "PerplexitySearch",
-    "SearchResult",
+    "AgentResponse", "PerplexityAgent", "PerplexitySearch", "SearchResult",
     # memory
-    "MemoryEntry",
-    "MemoryManager",
-    "MemoryStore",
-    "SessionContext",
-    "register_memory_tools",
+    "MemoryEntry", "MemoryManager", "MemoryStore",
+    "SessionContext", "register_memory_tools",
     # architectures
-    "MonolithicAgent",
-    "MonolithicConfig",
-    "RAGPipeline",
-    "RAGConfig",
-    "SwarmAgent",
-    "SwarmConfig",
-    "MCPToolHub",
-    "MCPHubConfig",
-    "ProductionOrchestrator",
-    "ProductionConfig",
+    "MonolithicAgent", "MonolithicConfig",
+    "SwarmAgent", "SwarmConfig",
+    "ProductionOrchestrator", "ProductionConfig",
+    # gemma 4 provider
+    "Gemma4Provider", "Gemma4Config", "Gemma4ThinkingResponse",
+    "MultimodalInput", "Gemma4FunctionCall",
+    "generate_ollama_modelfile", "generate_vllm_command",
+    # opus 4.6 provider
+    "Opus4Provider", "Opus4Config", "Opus4ThinkingResponse",
+    "VisionInput", "Opus4FunctionCall",
+    "get_effort_config", "estimate_opus4_cost",
+    # security
+    "SecurityMiddleware", "PermissionPolicy", "PermissionGate",
+    "InputSanitizer", "OutputMonitor", "RateLimiter",
+    "SecurityAlert", "SecurityDecision",
+    "strict_policy", "standard_policy", "permissive_policy", "safety_critical_policy",
+    # domain router
+    "DomainRouter", "TaskClassification", "DomainRoute", "DOMAIN_CONFIGS",
+    # speech / audio
+    "SpeechProvider", "STTConfig", "TTSConfig",
+    "STTBackend", "TTSBackend", "AudioFormat",
+    "TranscriptionResult", "TTSResult", "register_audio_tools",
+    # browser connector
+    "BrowserConnector", "BrowserSession", "BrowserConfig", "PageState",
+    # billing
+    "BillingManager", "NullBillingManager", "PricingTier", "UsageType",
+    "Customer", "UsageSummary", "BillingEvent",
+    "UsageTracker", "NullUsageTracker", "UsageBudget", "UsageSnapshot", "TIER_LIMITS",
+    # tasks
+    "TaskManager", "TaskSpec", "TaskStore", "Task",
+    "TaskStatus", "TaskPriority", "Schedule", "CheckIn", "FileSystemIPC",
+    # skills
+    "Skill", "SkillMatch", "SkillChain", "SkillRegistry", "SkillLoader",
+    "SkillActivator", "parse_skill_md", "match_skills",
+    # model council
+    "ModelCouncil", "CouncilConfig", "CouncilResult", "ModelVote",
+    "register_council_tools",
+    # citation
+    "CitationTracker", "CitationMiddleware", "CitationEnforcer",
+    "GroundedResponse", "Source", "Citation", "auto_ground",
+    # rate-limit middleware
+    "RateLimitMiddleware", "RateLimitDecision", "RateLimitOptions",
+    "OrchestraMiddleware", "AuditSink", "CircuitBreaker", "BreakerState",
+    "LocalTokenBucket",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"

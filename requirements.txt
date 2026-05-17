@@ -1,38 +1,38 @@
-# Horizon Orchestra — Python Dependencies
-# Install: pip install -r requirements.txt
-# For extras: pip install -e ".[all]"
-
-# ── Core (always required) ──────────────────────────────────────────────────
+# Horizon Orchestra — Core Dependencies
+# Required
 openai>=1.60.0
 httpx>=0.27.0
 
-# ── API Server ──────────────────────────────────────────────────────────────
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-pydantic>=2.7.0
-python-multipart>=0.0.9
-PyJWT>=2.9.0
+# Optional — install the extras you need
+# pip install horizon-orchestra[all]  for everything
 
-# ── Cloud (AWS) ─────────────────────────────────────────────────────────────
-boto3>=1.34.0
+# Gemma 4 / Google AI
+# google-genai>=1.0.0
 
-# ── Browser Automation ──────────────────────────────────────────────────────
-playwright>=1.45.0
+# Claude / Anthropic
+# anthropic>=0.40.0
 
-# ── Billing ─────────────────────────────────────────────────────────────────
-stripe>=10.0.0              # optional — httpx fallback is built-in
+# Billing
+# stripe>=11.0.0
 
-# ── Push Notifications ──────────────────────────────────────────────────────
-pywebpush>=2.0.0
+# Browser automation
+# playwright>=1.50.0
+# (after install: playwright install chromium)
 
-# ── Data Science Skills ─────────────────────────────────────────────────────
-pandas>=2.2.0
-numpy>=1.26.0
-matplotlib>=3.9.0
-scikit-learn>=1.5.0
+# Speech-to-Text
+# faster-whisper>=1.0.0   # local Whisper
+# deepgram-sdk>=3.0.0     # Deepgram Nova-3
+# assemblyai>=0.20.0      # AssemblyAI
 
-# ── Dev / Testing ───────────────────────────────────────────────────────────
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
-ruff>=0.5.0
-mypy>=1.11.0
+# Text-to-Speech
+# elevenlabs>=1.0.0       # ElevenLabs
+
+# YAML frontmatter in SKILL.md files
+# pyyaml>=6.0
+
+# Redis (rate limiting)
+# redis>=5.0.0
+
+# Production server
+# fastapi>=0.115.0
+# uvicorn[standard]>=0.34.0
