@@ -391,7 +391,7 @@ class TestSandboxSmoke:
         for root, dirs, files in os.walk("orchestra"):
             for f in files:
                 if f.endswith(".py") and "__pycache__" not in root:
-                    mod = os.path.join(root, f).replace("/", ".").replace(".py", "")
+                    mod = os.path.join(root, f).replace("\\", ".").replace("/", ".")[:-3]
                     try:
                         importlib.import_module(mod)
                         count += 1

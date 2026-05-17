@@ -39,9 +39,9 @@ const AUDIT_ARCH_X86_64: u32 = 0xC000003E;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BpfInstruction {
     pub opcode: u16,
-    pub jt: u8,      // jump if true
-    pub jf: u8,      // jump if false
-    pub k: u32,      // constant
+    pub jt: u8, // jump if true
+    pub jf: u8, // jump if false
+    pub k: u32, // constant
 }
 
 impl BpfInstruction {
@@ -233,15 +233,7 @@ pub fn load_filter(bytecode: &[u8]) -> OrchestraResult<()> {
     }
 
     // PR_SET_SECCOMP = 22, SECCOMP_MODE_FILTER = 2
-    let ret = unsafe {
-        libc::prctl(
-            22,
-            2,
-            &prog as *const SockFprog as usize,
-            0,
-            0,
-        )
-    };
+    let ret = unsafe { libc::prctl(22, 2, &prog as *const SockFprog as usize, 0, 0) };
     if ret != 0 {
         return Err(OrchestraError::Seccomp(
             "prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER) failed".to_string(),
@@ -350,15 +342,21 @@ impl PySeccompCompiler {
     /// Returns the BPF bytecode as bytes.
     #[staticmethod]
     #[pyo3(signature = (allowed_syscalls, deny_action="errno", check_arch=true))]
-    fn compile(allowed_syscalls: Vec<u32>, deny_action: &str, check_arch: bool) -> PyResult<Vec<u8>> {
+    fn compile(
+        allowed_syscalls: Vec<u32>,
+        deny_action: &str,
+        check_arch: bool,
+    ) -> PyResult<Vec<u8>> {
         let action = match deny_action {
             "kill_process" | "kill" => DenyAction::KillProcess,
             "kill_thread" => DenyAction::KillThread,
             "errno" => DenyAction::Errno,
             "log" => DenyAction::Log,
-            _ => return Err(pyo3::exceptions::PyValueError::new_err(
-                "deny_action must be 'kill_process', 'kill_thread', 'errno', or 'log'"
-            )),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "deny_action must be 'kill_process', 'kill_thread', 'errno', or 'log'",
+                ))
+            }
         };
 
         let profile = SeccompProfile {

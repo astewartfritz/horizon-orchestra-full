@@ -5,14 +5,16 @@
 //! - **Embedding Index**: HNSW approximate nearest neighbor search
 //! - **JSON Parser**: Streaming JSON parser with field extraction and schema validation
 //! - **Seccomp Compiler**: Compile seccomp-BPF filter programs from Orchestra profiles
+//! - **Router**: High-performance LLM router with intent classification, model selection, and dispatch
 //!
 //! This crate exposes a Python module via PyO3 for seamless integration with the
 //! Orchestra Python runtime.
 
-pub mod tokenizer;
 pub mod embedding_index;
 pub mod json_parser;
+pub mod router;
 pub mod seccomp_compiler;
+pub mod tokenizer;
 
 use pyo3::prelude::*;
 
@@ -38,6 +40,11 @@ fn orchestra_core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     let sec_module = PyModule::new(py, "seccomp_compiler")?;
     seccomp_compiler::register_python_module(&sec_module)?;
     m.add_submodule(&sec_module)?;
+
+    // Router submodule
+    let router_module = PyModule::new(py, "router")?;
+    router::register_python_module(&router_module)?;
+    m.add_submodule(&router_module)?;
 
     // Top-level version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

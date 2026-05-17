@@ -455,7 +455,7 @@ class TestFullSmoke:
             dirs[:] = [d for d in dirs if "__pycache__" not in d]
             for f in files:
                 if f.endswith(".py"):
-                    mod = os.path.join(root, f).replace("/", ".").replace(".py", "")
+                    mod = os.path.join(root, f).replace("\\", ".").replace("/", ".")[:-3]
                     try: importlib.import_module(mod); count += 1
                     except Exception as e: fails.append(f"{mod}: {str(e)[:60]}")
         assert len(fails) == 0, f"Failures:\n" + "\n".join(fails[:5])

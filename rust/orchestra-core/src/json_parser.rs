@@ -158,7 +158,10 @@ fn validate_recursive(
     if !type_matches(value, &schema.schema_type) {
         errors.push(ValidationError {
             path: path.to_string(),
-            message: format!("expected type '{}', got '{}'", schema.schema_type, actual_type),
+            message: format!(
+                "expected type '{}', got '{}'",
+                schema.schema_type, actual_type
+            ),
             expected: schema.schema_type.clone(),
             actual: actual_type.to_string(),
         });
@@ -336,8 +339,9 @@ impl PyJsonParser {
     fn validate(json_str: &str, schema_str: &str) -> PyResult<Vec<(String, String)>> {
         let value: Value = serde_json::from_str(json_str)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid JSON: {}", e)))?;
-        let schema: JsonSchema = serde_json::from_str(schema_str)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid schema: {}", e)))?;
+        let schema: JsonSchema = serde_json::from_str(schema_str).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("invalid schema: {}", e))
+        })?;
 
         let errors = validate_schema(&value, &schema);
         Ok(errors.into_iter().map(|e| (e.path, e.message)).collect())
@@ -374,7 +378,10 @@ mod tests {
     #[test]
     fn test_extract_field_simple() {
         let json: Value = serde_json::from_str(r#"{"name": "Alice", "age": 30}"#).unwrap();
-        assert_eq!(extract_field(&json, "name"), Some(Value::String("Alice".to_string())));
+        assert_eq!(
+            extract_field(&json, "name"),
+            Some(Value::String("Alice".to_string()))
+        );
         assert_eq!(extract_field(&json, "age"), Some(serde_json::json!(30)));
         assert_eq!(extract_field(&json, "missing"), None);
     }

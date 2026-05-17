@@ -26,7 +26,10 @@ impl Encoding {
         match s.to_lowercase().as_str() {
             "cl100k_base" | "cl100k" => Ok(Encoding::Cl100kBase),
             "o200k_base" | "o200k" => Ok(Encoding::O200kBase),
-            _ => Err(OrchestraError::Tokenizer(format!("unknown encoding: {}", s))),
+            _ => Err(OrchestraError::Tokenizer(format!(
+                "unknown encoding: {}",
+                s
+            ))),
         }
     }
 
@@ -79,9 +82,9 @@ impl TokenizerEngine {
     pub fn get(encoding: Encoding) -> OrchestraResult<Arc<TokenizerEngine>> {
         // Check cache first.
         {
-            let cache = TOKENIZER_CACHE.read().map_err(|e| {
-                OrchestraError::Tokenizer(format!("cache lock poisoned: {}", e))
-            })?;
+            let cache = TOKENIZER_CACHE
+                .read()
+                .map_err(|e| OrchestraError::Tokenizer(format!("cache lock poisoned: {}", e)))?;
             if let Some(engine) = cache.get(&encoding) {
                 return Ok(Arc::clone(engine));
             }
@@ -92,9 +95,9 @@ impl TokenizerEngine {
 
         // Store in cache.
         {
-            let mut cache = TOKENIZER_CACHE.write().map_err(|e| {
-                OrchestraError::Tokenizer(format!("cache lock poisoned: {}", e))
-            })?;
+            let mut cache = TOKENIZER_CACHE
+                .write()
+                .map_err(|e| OrchestraError::Tokenizer(format!("cache lock poisoned: {}", e)))?;
             cache.insert(encoding, Arc::clone(&engine));
         }
 
@@ -363,8 +366,14 @@ mod tests {
 
     #[test]
     fn test_encoding_from_str() {
-        assert_eq!(Encoding::from_str("cl100k_base").unwrap(), Encoding::Cl100kBase);
-        assert_eq!(Encoding::from_str("o200k_base").unwrap(), Encoding::O200kBase);
+        assert_eq!(
+            Encoding::from_str("cl100k_base").unwrap(),
+            Encoding::Cl100kBase
+        );
+        assert_eq!(
+            Encoding::from_str("o200k_base").unwrap(),
+            Encoding::O200kBase
+        );
         assert!(Encoding::from_str("unknown").is_err());
     }
 

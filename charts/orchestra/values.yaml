@@ -43,6 +43,63 @@ ollama:
     size: 50Gi
     storageClass: ""
 
+# ── Redis (distributed state + task queue) ──────────────────
+
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+  metrics:
+    enabled: true
+
+# ── Scaling Layer ───────────────────────────────────────────
+
+scaling:
+  taskQueue:
+    enabled: false
+    maxDepth: 100000
+    backpressureThreshold: 10000
+    rateLimitPerSecond: 100
+  workerPool:
+    poolSize: 4
+    maxTasksPerWorker: 100
+  autoScaling:
+    minWorkers: 2
+    maxWorkers: 100
+    scaleUpThreshold: 5000
+    scaleDownThreshold: 500
+    cooldownSeconds: 30
+    targetWorkersPerQueueDepth: 50
+  circuitBreaker:
+    failureThreshold: 5
+    resetTimeout: 30
+  edgeAdapter:
+    enabled: false
+    mode: ollama
+    ollamaModel: qwen2.5:1.5b
+
+# ── Go Router State Manager ─────────────────────────────────
+
+router:
+  enabled: false
+  image:
+    repository: orchestra/router-state-manager
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 8400
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
 # ── Service ─────────────────────────────────────────────────
 
 service:
@@ -77,6 +134,10 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
+  # Optional: custom metrics for queue-depth-based scaling
+  queueDepthMetric:
+    enabled: false
+    targetValue: 5000
 
 # ── Resource Limits ─────────────────────────────────────────
 

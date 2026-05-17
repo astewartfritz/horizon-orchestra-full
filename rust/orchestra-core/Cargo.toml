@@ -49,8 +49,10 @@ simd = ["packed_simd_2"]
 
 [[bench]]
 name = "tokenizer_bench"
+path = "benches/tokenizer_bench.rs"
 harness = false
 
 [[bench]]
 name = "hnsw_bench"
+path = "benches/hnsw_bench.rs"
 harness = false

@@ -120,3 +120,23 @@
 - charts/orchestra/: Helm chart with deployment, HPA, ingress, PVC, Ollama sidecar, PDB
 - C:\Users\ashto\hf-src: Shallow-cloned Chromium source (Horizon Frontier fork), 1.75M commits
 - C:\Users\ashto\depot_tools: Installed depot_tools with gn v2397 and ninja v1.13.2
+
+## New: LLM-as-Router Architecture (Multi-Agent Orchestration)
+### Python (`src/code_agent/orchestrator/router/`)
+- **RouterPlanner**: LLM-based master planner that decomposes user requests into step plans. Detects intent (8 types), builds plans with agent assignments, supports adaptive re-planning on failure. Falls back to intent-routing table when LLM unavailable.
+- **AgentPool**: Per-model agent management with model binning (3B-8B quantized models per role). Builds role-tailored prompts with context injection and history formatting. 8 agent classes: coder, reasoner, summarizer, validator, scratch, searcher, extractor, planner.
+- **StateGraph**: Global state graph with full trace logging. Create/update/complete/delete state lifecycle. Exportable traces for audit and replay. Per-step history with status tracking.
+- **ResultAggregator**: Executes plans step-by-step with retry logic and fallback model routing. Builds final output by merging results (code merge, summary pass-through, step-by-step for reasoning). Calls fallback models on primary failure.
+- **API**: 9 REST endpoints at `/api/router/` — plan, execute, detect, state, trace, states list, delete, agents, health. Registered in server.py.
+- **Tests**: 34 tests covering all models, planner (intent detection, JSON extraction, fallback), agent pool (prompt building, model selection), state graph (CRUD, tracing, export), and integration flows.
+
+### Rust (`rust/orchestra-core/src/router.rs`)
+- **Router**: Fast intent classifier using keyword matching (microsecond latency, no LLM call). Routes to optimal agent chain per intent type.
+- **ModelSelector**: Priority-based model selection with overrides. Maps agent class + task hint to best-fit model.
+- **IntentClassifier**: Keyword-based intent detection for 5 categories (code, reasoning, summary, search, general). Runs inline, no network call.
+- **PyO3 bindings**: PyRouter, PyIntentClassifier, PyModelSelector classes exposed to Python via `orchestra_core.router`.
+
+### Go (`go-services/router/`)
+- **State manager**: HTTP server on port 8400 with in-memory state store. 9 REST endpoints matching the Python state graph API.
+- **Event streaming**: SSE endpoint at `/api/events` for real-time state change notifications. Pub/sub watcher pattern.
+- **Thread-safe store**: RWMutex-guarded state with create/read/update/delete operations. Full trace event logging per task.

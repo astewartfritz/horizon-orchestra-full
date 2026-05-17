@@ -75,6 +75,24 @@ spec:
             - name: LANGFUSE_SECRET_KEY
               value: {{ .Values.extraEnv.LANGFUSE_SECRET_KEY | quote }}
             {{- end }}
+            {{- if .Values.redis.enabled }}
+            - name: REDIS_URL
+              value: "redis://{{ .Release.Name }}-redis-master:6379"
+            {{- end }}
+            {{- if .Values.scaling.taskQueue.enabled }}
+            - name: SCALING_TASK_QUEUE_ENABLED
+              value: "true"
+            - name: SCALING_QUEUE_MAX_DEPTH
+              value: "{{ .Values.scaling.taskQueue.maxDepth }}"
+            - name: SCALING_BACKPRESSURE_THRESHOLD
+              value: "{{ .Values.scaling.taskQueue.backpressureThreshold }}"
+            - name: SCALING_RATE_LIMIT_PER_SECOND
+              value: "{{ .Values.scaling.taskQueue.rateLimitPerSecond }}"
+            - name: SCALING_MIN_WORKERS
+              value: "{{ .Values.scaling.autoScaling.minWorkers }}"
+            - name: SCALING_MAX_WORKERS
+              value: "{{ .Values.scaling.autoScaling.maxWorkers }}"
+            {{- end }}
           {{- with .Values.extraEnvSecrets }}
           envFrom:
             - secretRef:

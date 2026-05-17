@@ -25,6 +25,15 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- if .Values.autoscaling.queueDepthMetric.enabled }}
+    - type: Pods
+      pods:
+        metric:
+          name: orchestra_queue_depth
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.autoscaling.queueDepthMetric.targetValue }}
+    {{- end }}
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300

@@ -3,8 +3,8 @@
 //! Supports cosine similarity and L2 (Euclidean) distance metrics.
 //! Designed for fast vector search in the Orchestra embedding pipeline.
 
-use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
@@ -171,7 +171,11 @@ impl HNSWIndex {
         // For each level of the new node, find and connect neighbors.
         for lc in 0..=std::cmp::min(level, self.max_level) {
             let neighbors = self.search_layer(current, vector, self.config.ef_construction, lc);
-            let max_conn = if lc == 0 { self.config.m0 } else { self.config.m };
+            let max_conn = if lc == 0 {
+                self.config.m0
+            } else {
+                self.config.m
+            };
             let selected: Vec<usize> = neighbors.iter().take(max_conn).map(|c| c.index).collect();
 
             // Connect new node to neighbors.
@@ -274,9 +278,8 @@ impl HNSWIndex {
     pub fn save(&self, path: &Path) -> OrchestraResult<()> {
         let file = File::create(path)?;
         let writer = BufWriter::new(file);
-        serde_json::to_writer(writer, self).map_err(|e| {
-            OrchestraError::EmbeddingIndex(format!("serialize index: {}", e))
-        })?;
+        serde_json::to_writer(writer, self)
+            .map_err(|e| OrchestraError::EmbeddingIndex(format!("serialize index: {}", e)))?;
         Ok(())
     }
 
@@ -284,9 +287,8 @@ impl HNSWIndex {
     pub fn load(path: &Path) -> OrchestraResult<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let index: HNSWIndex = serde_json::from_reader(reader).map_err(|e| {
-            OrchestraError::EmbeddingIndex(format!("deserialize index: {}", e))
-        })?;
+        let index: HNSWIndex = serde_json::from_reader(reader)
+            .map_err(|e| OrchestraError::EmbeddingIndex(format!("deserialize index: {}", e)))?;
         Ok(index)
     }
 
@@ -334,7 +336,10 @@ impl HNSWIndex {
         let mut results = BinaryHeap::new();
 
         let d = self.distance(query, &self.nodes[entry].vector);
-        candidates.push(Candidate { index: entry, distance: d });
+        candidates.push(Candidate {
+            index: entry,
+            distance: d,
+        });
         visited.insert(entry);
 
         while let Some(current) = candidates.pop() {
@@ -352,7 +357,10 @@ impl HNSWIndex {
                 for &neighbor in &self.nodes[current.index].connections[layer] {
                     if visited.insert(neighbor) {
                         let nd = self.distance(query, &self.nodes[neighbor].vector);
-                        candidates.push(Candidate { index: neighbor, distance: nd });
+                        candidates.push(Candidate {
+                            index: neighbor,
+                            distance: nd,
+                        });
                     }
                 }
             }
@@ -360,7 +368,11 @@ impl HNSWIndex {
 
         // Collect and sort results by distance.
         let mut result_vec: Vec<Candidate> = results.into_iter().collect();
-        result_vec.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(Ordering::Equal));
+        result_vec.sort_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(Ordering::Equal)
+        });
         result_vec
     }
 
@@ -422,11 +434,21 @@ impl PyHNSWIndex {
     /// Create a new HNSW index.
     #[new]
     #[pyo3(signature = (dimensions=1536, m=16, ef_construction=200, ef_search=50, metric="cosine"))]
-    fn new(dimensions: usize, m: usize, ef_construction: usize, ef_search: usize, metric: &str) -> PyResult<Self> {
+    fn new(
+        dimensions: usize,
+        m: usize,
+        ef_construction: usize,
+        ef_search: usize,
+        metric: &str,
+    ) -> PyResult<Self> {
         let dist_metric = match metric {
             "cosine" => DistanceMetric::Cosine,
             "l2" | "euclidean" => DistanceMetric::L2,
-            _ => return Err(pyo3::exceptions::PyValueError::new_err("metric must be 'cosine' or 'l2'")),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "metric must be 'cosine' or 'l2'",
+                ))
+            }
         };
 
         let config = HNSWConfig {

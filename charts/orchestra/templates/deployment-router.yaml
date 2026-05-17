@@ -1,0 +1,51 @@
+{{- if .Values.router.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orchestra.fullname" . }}-router
+  labels:
+    {{- include "orchestra.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router-state-manager
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "orchestra.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: router-state-manager
+  template:
+    metadata:
+      labels:
+        {{- include "orchestra.labels" . | nindent 8 }}
+        app.kubernetes.io/component: router-state-manager
+    spec:
+      serviceAccountName: {{ include "orchestra.serviceAccountName" . }}
+      containers:
+        - name: router
+          image: "{{ .Values.router.image.repository }}:{{ .Values.router.image.tag }}"
+          imagePullPolicy: {{ .Values.router.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.router.port }}
+              protocol: TCP
+          env:
+            - name: ROUTER_PORT
+              value: "{{ .Values.router.port }}"
+            {{- if .Values.redis.enabled }}
+            - name: REDIS_URL
+              value: "redis://{{ .Release.Name }}-redis-master:6379"
+            {{- end }}
+          resources:
+            {{- toYaml .Values.router.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
