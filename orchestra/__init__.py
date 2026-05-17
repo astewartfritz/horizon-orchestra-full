@@ -58,8 +58,37 @@ from .memory import (
 
 # ── Architectures ───────────────────────────────────────────────────────────
 from .arch_a import MonolithicAgent, MonolithicConfig
+from .arch_b import RAGPipeline, RAGConfig
 from .arch_c import SwarmAgent, SwarmConfig
+from .arch_d import MCPToolHub, MCPHubConfig, MCPServerConfig
 from .arch_e import ProductionOrchestrator, ProductionConfig
+
+# ── Connectors ────────────────────────────────────────────────────────────────
+try:
+    from .connectors.salesforce import SalesforceConnector
+    from .connectors.google_workspace import GoogleWorkspaceConnector
+    from .connectors.microsoft365 import Microsoft365Connector
+    from .connectors.meta_business import MetaBusinessConnector
+    from .connectors.amazon_business import AmazonBusinessConnector
+except ImportError:
+    pass
+
+# ── Teams ────────────────────────────────────────────────────────────────────
+try:
+    from .teams.team import OrchestraTeam, TeamConfig
+    from .teams.pre_built_teams import enterprise_connect_team, coding_team, research_team, sales_team
+except ImportError:
+    pass
+
+# ── Guardian ──────────────────────────────────────────────────────────────────
+try:
+    from .guardian.inference_gateway import InferenceGateway
+    from .guardian.policy_engine import PolicyEngine
+    from .guardian.capability_lattice import CapabilityLattice
+    from .guardian.audit_ledger import AuditLedger
+    from .guardian.beyond_guardrails import BeyondGuardrails
+except ImportError:
+    pass
 
 # ── Gemma 4 Provider ────────────────────────────────────────────────────────
 from .gemma4_provider import (
@@ -253,7 +282,9 @@ __all__ = [
     "SessionContext", "register_memory_tools",
     # architectures
     "MonolithicAgent", "MonolithicConfig",
+    "RAGPipeline", "RAGConfig",
     "SwarmAgent", "SwarmConfig",
+    "MCPToolHub", "MCPHubConfig", "MCPServerConfig",
     "ProductionOrchestrator", "ProductionConfig",
     # gemma 4 provider
     "Gemma4Provider", "Gemma4Config", "Gemma4ThinkingResponse",
@@ -296,6 +327,15 @@ __all__ = [
     "RateLimitMiddleware", "RateLimitDecision", "RateLimitOptions",
     "OrchestraMiddleware", "AuditSink", "CircuitBreaker", "BreakerState",
     "LocalTokenBucket",
+    # connectors
+    "SalesforceConnector", "GoogleWorkspaceConnector",
+    "Microsoft365Connector", "MetaBusinessConnector", "AmazonBusinessConnector",
+    # teams
+    "OrchestraTeam", "TeamConfig", "enterprise_connect_team",
+    "coding_team", "research_team", "sales_team",
+    # guardian
+    "InferenceGateway", "PolicyEngine", "CapabilityLattice",
+    "AuditLedger", "BeyondGuardrails",
 ]
 
 __version__ = "0.3.0"
