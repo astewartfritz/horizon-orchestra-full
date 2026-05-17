@@ -77,6 +77,9 @@ except ImportError:
 try:
     from .teams.team import OrchestraTeam, TeamConfig
     from .teams.pre_built_teams import enterprise_connect_team, coding_team, research_team, sales_team
+    from .teams.fleet import OrchestraFleet, FleetConfig
+    from .teams.negotiator import AgentNegotiator, TaskBid, NegotiationResult
+    from .teams.orchestrator_mesh import OrchestratorMesh, MeshNode, MeshConfig
 except ImportError:
     pass
 
@@ -87,6 +90,8 @@ try:
     from .guardian.capability_lattice import CapabilityLattice
     from .guardian.audit_ledger import AuditLedger
     from .guardian.beyond_guardrails import BeyondGuardrails
+    from .guardian.code_guard import CodeGuard, CodeThreat, CodeScanResult
+    from .guardian.ingestion_gate import IngestionGate, IngestionViolation, IngestionReport
 except ImportError:
     pass
 
@@ -333,9 +338,12 @@ __all__ = [
     # teams
     "OrchestraTeam", "TeamConfig", "enterprise_connect_team",
     "coding_team", "research_team", "sales_team",
+    "OrchestraFleet", "FleetConfig", "AgentNegotiator", "TaskBid", "NegotiationResult",
+    "OrchestratorMesh", "MeshNode", "MeshConfig",
     # guardian
     "InferenceGateway", "PolicyEngine", "CapabilityLattice",
-    "AuditLedger", "BeyondGuardrails",
+    "AuditLedger", "BeyondGuardrails", "CodeGuard", "CodeThreat",
+    "CodeScanResult", "IngestionGate", "IngestionViolation", "IngestionReport",
 ]
 
 __version__ = "0.3.0"
