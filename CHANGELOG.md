@@ -4,6 +4,62 @@ All notable changes to Horizon Orchestra are documented here.
 
 ---
 
+## [0.5.0] — 2026-05-17
+
+### Added — AgentMesh (P2P Agent Network)
+- **AgentRegistry**: register/unregister/discover agents by capability, type, or tag; heartbeat + stale eviction; callbacks on register/unregister/status-change
+- **AgentNode**: lifecycle (start/stop), custom message handlers per MessageType, LLM function injection
+- **MeshNetwork**: broadcast, direct request, capability-routed request, delegate, full trace storage
+- **MeshRouter**: multi-target routing with capability lookup
+- **MeshMessage / MessageType**: typed protocol (REQUEST/RESPONSE/DELEGATE/HEARTBEAT/BROADCAST)
+- **10 REST endpoints** at `/api/agentmesh/` — register, list, heartbeat, discover, message, request, health, traces
+- **34 tests** passing
+
+### Added — Teams & Swarm Coordination
+- **TeamFactory**: task analysis → capability extraction → team formation with 3 built-in strategies
+  - `BestFitStrategy` — highest-capability match per required skill
+  - `LoadBalancedStrategy` — distributes load across available agents
+  - `MinimumTeamStrategy` — smallest team that covers all capabilities
+- **AgentTeam**: parallel member execution, leader-coordinated synthesis, add/remove members
+- **TeamLeader**: delegates task to full team, returns synthesized result
+- **SwarmCoordinator**: 4 swarm modes — consensus (multi-round voting), hierarchical (leader + sub-groups), collaborative (parallel subtasks), competitive (best-wins)
+- **REST routes** at `/api/teams/` — form, execute, list, swarm/{consensus,hierarchical,collaborative,competitive}, analyze-task
+- **28 tests** passing (+ uses agentmesh fixtures)
+
+### Added — Channels v2 (Production Infrastructure)
+- **ChannelHealthMonitor**: per-channel status tracking, latency averaging, consecutive failure counting, healthy/error/unknown states
+- **OutputFormatter**: platform-aware message formatting for 7 channels (Slack bold→`*`, Telegram HTML, WhatsApp code strip, Email HTML, iMessage placeholder, Discord, default); custom formatter registration
+- **ChannelRetryEngine**: 4 retry strategies (FIXED, EXPONENTIAL, LINEAR, JITTER) with per-channel config, async + sync callable support
+- **MessageQueue**: priority queue (CRITICAL/HIGH/NORMAL/LOW), multi-worker pool, dead-letter queue with requeue, batch enqueue, per-channel stats
+- **10 REST endpoints** at `/api/channels/v2/` — health, format, retry-config, enqueue, queue stats, DLQ, register-channel
+- **34 tests** passing
+
+### Added — Workflow v2 REST API
+- **11 REST endpoints** at `/api/workflow-v2/` — CRUD workflows, run by ID, run direct (inline), list instances, get instance detail, resume human-handoff step, list step types
+- Exposes full DAG Workflow Engine v2 (AgentStep, ToolStep, TransformStep, ParallelStep, ConditionStep, SwitchStep, LoopStep, HumanHandoffStep, SubWorkflowStep)
+
+### Added — Reasoning REST API
+- **6 REST endpoints** at `/api/reasoning/` — list strategies, get strategy + system prompt, select strategy (auto), analyze task signals, start session, list/get traces
+- Exposes auto strategy selection (CoT → PlanAndExecute → ReflectOnError based on task length + keywords)
+- **23 tests** passing
+
+### Added — Monitor & Alerting REST API
+- **11 REST endpoints** at `/api/monitor/` — record metrics (counter/gauge/histogram), batch record, list/query/aggregate metrics, summary, prune, alert rules CRUD, alert check, alert history
+- Backed by SQLite MetricsCollector + AlertManager with 4 condition types (gt/lt/gte/lte) and cooldown deduplication
+- **25 tests** passing
+
+### Added — Telemetry REST API
+- **8 REST endpoints** at `/api/telemetry/` — start trace, start/end span, get trace detail, get summary, list active traces, delete trace, health
+- Wraps AgentTracer singleton; spans include parent_id, attributes, duration_ms, status
+- **16 tests** passing
+
+### Stats
+- **+143 new tests** (total 1535 passing)
+- **+6 new REST route modules** (reasoning, monitor, telemetry, agentmesh, teams, channels/v2, workflow-v2)
+- 5 new Python packages (`agentmesh`, `teams`, `reasoning/routes`, `monitor/routes`, `telemetry/routes`)
+
+---
+
 ## [0.1.0] — 2026-04-07
 
 ### Added — Core Orchestration

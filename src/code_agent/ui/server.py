@@ -146,6 +146,21 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         register_workflow_v2_routes(app)
     except Exception:
         pass
+    try:
+        from code_agent.reasoning.routes import register_reasoning_routes
+        register_reasoning_routes(app)
+    except Exception:
+        pass
+    try:
+        from code_agent.monitor.routes import register_monitor_routes
+        register_monitor_routes(app)
+    except Exception:
+        pass
+    try:
+        from code_agent.telemetry.routes import register_telemetry_routes
+        register_telemetry_routes(app)
+    except Exception:
+        pass
     # Multi-channel webhooks (Python-native adapters)
     from code_agent.channels import MessageRouter, register_channel_webhooks
     _router = MessageRouter(agent_config)
