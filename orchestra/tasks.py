@@ -661,8 +661,11 @@ class TaskStore:
 
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they do not already exist."""
-        with self._connect() as conn:
+        conn = self._connect()
+        try:
             conn.executescript(_SCHEMA)
+        finally:
+            conn.close()
 
     # ── Internal helpers ────────────────────────────────────────────────────
 

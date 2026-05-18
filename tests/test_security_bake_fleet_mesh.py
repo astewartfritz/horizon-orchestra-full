@@ -5,7 +5,7 @@ Run with: pytest tests/test_security_bake_fleet_mesh.py -v
 from __future__ import annotations
 import asyncio, time, pytest
 
-def _run(c): return asyncio.get_event_loop().run_until_complete(c)
+def _run(c): return asyncio.run(c)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

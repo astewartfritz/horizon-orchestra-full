@@ -19,7 +19,7 @@ from orchestra.agent_loop import FinalAnswerEvent, ToolCallEvent
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def _mock_chat_response(content="Done.", tool_calls=None):

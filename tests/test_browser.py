@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 def run(coro):
     """Run an async coroutine in the current event loop (test helper)."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

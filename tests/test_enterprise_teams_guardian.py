@@ -5,7 +5,7 @@ Run with: pytest tests/test_enterprise_teams_guardian.py -v
 from __future__ import annotations
 import asyncio, time, hashlib, hmac, pytest
 
-def _run(c): return asyncio.get_event_loop().run_until_complete(c)
+def _run(c): return asyncio.run(c)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
