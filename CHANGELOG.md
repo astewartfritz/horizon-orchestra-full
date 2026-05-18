@@ -60,6 +60,43 @@ All notable changes to Horizon Orchestra are documented here.
 
 ---
 
+## [0.6.0] — 2026-05-17
+
+### Added — Active Agents (autonomous agent drivers)
+- **`ActiveAgent` ABC** — common interface: `execute(task, context) → AgentResult`, `health_check() → AgentHealthStatus`, `can_handle(intent)`, `to_dict()`
+- **`AgentCapability`** — named capability with `intent_keywords` for keyword routing
+- **`AgentResult`** — structured output with `success`, `output`, `error`, `duration_ms`, `metadata`
+- **`AgentHealthStatus`** — per-agent health with `status` (AVAILABLE/DEGRADED/UNAVAILABLE/UNKNOWN), `version`, `latency_ms`
+- **`ClaudeCodeAgent`** (priority=10) — spawns `claude --print --output-format text`; falls back to `anthropic.AsyncAnthropic` (claude-opus-4-7); capabilities: coding, file_ops, git, shell
+- **`CodexAgent`** (priority=20) — spawns `codex --full-auto -q`; falls back to OpenAI Chat API (gpt-4o); capabilities: coding, refactor, explain
+- **`OpenClawAgent`** (priority=30) — spawns `openclaw run --task`; falls back to Ollama (`codellama`); capabilities: coding, analysis, search, test
+- **`ActiveAgentRegistry`** — register/unregister agents, priority-sorted discovery, intent-based and capability-based lookup, concurrent health checks, `execute_with_fallback(task, intent, max_fallbacks)`
+- **`build_default_registry()`** — factory that pre-populates registry with all built-in agents
+
+### Added — Nemotron Router (intelligent task dispatch)
+- **`NemotronClassifier`** — sends task + agent list to Nemotron (Ollama `nemotron-mini`) for JSON classification; gracefully falls back to keyword scoring when Ollama is unavailable
+- **`NemotronRouter`** — runs health checks → filters available agents → classifies via Nemotron → validates choice → builds fallback chain; `route_and_execute()` tries chain until success
+- **`NemotronDispatch`** — high-level dispatcher with in-memory history (configurable limit) and aggregated stats (total, success_rate, agents_used, avg_duration_ms)
+- **`RoutingDecision`** — captures classification result, selected agent, fallback chain, health_filtered flag, duration
+- **`DispatchRecord`** — captures task preview, routing decision, agent result, total duration, timestamp
+- **6 REST endpoints** at `/api/nemotron/`:
+  - `POST /route` — classify + execute; returns output + routing metadata
+  - `POST /classify` — classify only (no execution)
+  - `GET /agents` — list all agents with health status
+  - `GET /agents/{name}/health` — single-agent health
+  - `GET /history` — recent dispatch records
+  - `GET /stats` — aggregated dispatch statistics
+- Registered in `server.py` alongside other route modules
+- **43 + 22 = 65 tests** passing (`test_active_agents.py`, `test_nemotron.py`)
+
+### Stats
+- **+65 new tests** (total 1618 passing)
+- **+2 new Python packages** (`active_agents`, `nemotron`)
+- **+6 new REST endpoints** at `/api/nemotron/`
+- Full Orchestra → Nemotron → Active Agent pipeline complete
+
+---
+
 ## [0.1.0] — 2026-04-07
 
 ### Added — Core Orchestration

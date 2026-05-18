@@ -161,6 +161,11 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         register_telemetry_routes(app)
     except Exception:
         pass
+    try:
+        from code_agent.nemotron.routes import register_nemotron_routes
+        register_nemotron_routes(app)
+    except Exception:
+        pass
     # Multi-channel webhooks (Python-native adapters)
     from code_agent.channels import MessageRouter, register_channel_webhooks
     _router = MessageRouter(agent_config)
