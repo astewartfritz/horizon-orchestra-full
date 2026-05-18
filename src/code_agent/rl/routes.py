@@ -2,10 +2,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from code_agent.rl.buffer import ExperienceBuffer
 from code_agent.rl.loop import FeedbackLoop
 from code_agent.rl.policy import RoutingPolicy
 from code_agent.rl.trainer import OrchestraTrainer
+
+
+class _TrainRequest(BaseModel):
+    run_lora: bool = False
+
+
+class _ResetRequest(BaseModel):
+    agent_name: str | None = None
 
 _loop: FeedbackLoop | None = None
 
@@ -22,13 +32,6 @@ def _get_loop() -> FeedbackLoop:
 
 def register_rl_routes(app: Any, prefix: str = "/api/rl") -> None:
     from fastapi import HTTPException
-    from pydantic import BaseModel
-
-    class TrainRequest(BaseModel):
-        run_lora: bool = False
-
-    class ResetRequest(BaseModel):
-        agent_name: str | None = None
 
     @app.get(f"{prefix}/stats")
     async def rl_stats():
@@ -75,7 +78,7 @@ def register_rl_routes(app: Any, prefix: str = "/api/rl") -> None:
         return _get_loop()._policy.summary()
 
     @app.post(f"{prefix}/policy/reset")
-    async def reset_policy(req: ResetRequest):
+    async def reset_policy(req: _ResetRequest):
         """Reset policy for a specific agent or all agents."""
         loop = _get_loop()
         if req.agent_name:
@@ -86,7 +89,7 @@ def register_rl_routes(app: Any, prefix: str = "/api/rl") -> None:
             return {"reset": count, "message": "Full policy reset"}
 
     @app.post(f"{prefix}/train")
-    async def trigger_training(req: TrainRequest):
+    async def trigger_training(req: _TrainRequest):
         """Manually trigger a training cycle (policy update + optional LoRA)."""
         loop = _get_loop()
         report = loop._trainer.train(run_lora=req.run_lora)

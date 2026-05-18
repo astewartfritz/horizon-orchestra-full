@@ -2,10 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from code_agent.active_agents.registry import build_default_registry
 from code_agent.nemotron.classifier import NemotronClassifier
 from code_agent.nemotron.dispatch import NemotronDispatch
 from code_agent.nemotron.router import NemotronRouter
+
+
+class _RouteRequest(BaseModel):
+    task: str
+    context: dict = {}
+    skip_health_check: bool = False
+
+
+class _ClassifyRequest(BaseModel):
+    task: str
 
 
 def _build_dispatch() -> NemotronDispatch:
@@ -44,18 +56,9 @@ def _get_dispatch() -> NemotronDispatch:
 def register_nemotron_routes(app: Any, prefix: str = "/api/nemotron") -> None:
     """Register Nemotron routing REST endpoints on the given FastAPI app."""
     from fastapi import HTTPException
-    from pydantic import BaseModel
-
-    class RouteRequest(BaseModel):
-        task: str
-        context: dict = {}
-        skip_health_check: bool = False
-
-    class ClassifyRequest(BaseModel):
-        task: str
 
     @app.post(f"{prefix}/route")
-    async def route_and_execute(req: RouteRequest):
+    async def route_and_execute(req: _RouteRequest):
         """Route task via Nemotron and execute with the selected agent."""
         dispatch = _get_dispatch()
         record = await dispatch.dispatch(
@@ -73,7 +76,7 @@ def register_nemotron_routes(app: Any, prefix: str = "/api/nemotron") -> None:
         }
 
     @app.post(f"{prefix}/classify")
-    async def classify_task(req: ClassifyRequest):
+    async def classify_task(req: _ClassifyRequest):
         """Classify a task and return routing recommendation without executing."""
         dispatch = _get_dispatch()
         router = dispatch._router

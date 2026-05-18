@@ -2,8 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from code_agent.council.council import ModelCouncil
 from code_agent.council.scorer import QualityGate, categorise_task
+
+
+class _EvaluateRequest(BaseModel):
+    task: str
+    output: str
+    agent_name: str = "unknown"
+
+
+class _GateRequest(BaseModel):
+    task: str
+    output: str
+    agent_name: str = "unknown"
 
 
 _council: ModelCouncil | None = None
@@ -25,27 +39,16 @@ def _get_gate() -> QualityGate:
 
 
 def register_council_routes(app: Any, prefix: str = "/api/council") -> None:
-    from pydantic import BaseModel
-
-    class EvaluateRequest(BaseModel):
-        task: str
-        output: str
-        agent_name: str = "unknown"
-
-    class GateRequest(BaseModel):
-        task: str
-        output: str
-        agent_name: str = "unknown"
 
     @app.post(f"{prefix}/evaluate")
-    async def evaluate(req: EvaluateRequest):
+    async def evaluate(req: _EvaluateRequest):
         """Run model council scoring on a task+output pair."""
         council = _get_council()
         verdict = await council.evaluate(req.task, req.output, req.agent_name)
         return verdict.to_dict()
 
     @app.post(f"{prefix}/gate")
-    async def quality_gate(req: GateRequest):
+    async def quality_gate(req: _GateRequest):
         """Run council + quality gate; returns reward signal."""
         council = _get_council()
         gate = _get_gate()
