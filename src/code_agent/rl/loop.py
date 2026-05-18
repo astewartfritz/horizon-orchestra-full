@@ -101,6 +101,22 @@ class FeedbackLoop:
                 reward=signal.reward,
             )
 
+            # Feed into real-time dashboard metrics
+            try:
+                from code_agent.dashboard.metrics import get_metrics
+                m = get_metrics()
+                # Token estimate from dispatch output
+                via = record.result.metadata.get("via", "")
+                model = record.result.metadata.get("model", record.result.agent_name)
+                m.record_dispatch(record.result.agent_name, record.result.output, model)
+                # Per-judge latencies
+                for js in verdict.judge_scores:
+                    m.record_judge_latency(js.judge_id, js.duration_ms)
+                # Gate pass/fail
+                m.record_gate_result(record.result.agent_name, gate_result.passed, gate_result.reward)
+            except Exception:
+                pass
+
             self._signals_since_train += 1
             logger.debug(
                 "Feedback: agent=%s cat=%s reward=%.3f ema→%.3f",

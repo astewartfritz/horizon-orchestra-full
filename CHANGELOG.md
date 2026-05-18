@@ -60,6 +60,51 @@ All notable changes to Horizon Orchestra are documented here.
 
 ---
 
+## [0.8.0] — 2026-05-18
+
+### Added — Real-time Cost Dashboard (`/dashboard`)
+- **Single-page dashboard** served at `GET /dashboard` — dark-theme, four-quadrant panel, zero build steps (Chart.js from CDN + vanilla JS + SSE)
+- **SSE stream** at `GET /dashboard/stream` — pushes a full metrics snapshot every 2 seconds; browser auto-reconnects on disconnect
+- **REST snapshot** at `GET /dashboard/snapshot` — one-shot JSON for scripting / health checks
+
+**Panel 1 — Token Spend**
+- Cumulative USD + per-hour burn rate by model
+- Running total tokens (input + output)
+- Time-series line chart (3-minute window)
+- Per-model cost bar chart (gpt-4o, claude-haiku, codex-mini, ollama=free, ...)
+- Cost table: Claude Haiku $0.80/$4.00 per 1M, GPT-4o $2.50/$10.00, Opus $15/$75, Ollama $0
+
+**Panel 2 — Acceptance Rates**
+- Rolling 60-second pass rate + all-time rate
+- Evaluated / passed counts
+- Time-series line chart
+- Per-agent pass-rate bar chart (colour-coded green/orange/red)
+
+**Panel 3 — Council Latency**
+- P50 / P95 / P99 / Mean latency pills
+- Time-series dual-line chart (P50 green, P95 amber)
+- Per-judge average latency bar chart
+
+**Panel 4 — Compute Utilization**
+- Live CPU % and Memory MB gauges with animated fill bars
+- Time-series dual-axis chart (CPU left, Memory right)
+- SQLite DB size pills (experience.db, policy.db, metrics.db)
+
+**`DashboardMetrics` backend**
+- Thread-safe ring-buffer (90 points × 2s = 3-min window) for all four metric streams
+- `record_token_usage(model, in, out)` — exact cost from rate table, char-count estimate fallback
+- `record_judge_latency(judge_id, ms)` — per-judge latency tracking
+- `record_gate_result(agent, passed, reward)` — acceptance tracking
+- Background psutil sampler thread (5s interval, daemon) with graceful fallback when psutil unavailable
+- `tick()` advances all four time-series ring-buffers in sync with SSE interval
+- `snapshot()` computes P50/P95/P99 from raw latency events, per-hour burn rate from last-3600s window
+
+**Auto-wired into FeedbackLoop** — every council evaluation automatically pushes token, latency, and acceptance data to the dashboard with no config needed
+
+- **30 new tests** passing, total **1717 passing**
+
+---
+
 ## [0.7.0] — 2026-05-17
 
 ### Added — Model Council (LLM-as-Judge evaluation)

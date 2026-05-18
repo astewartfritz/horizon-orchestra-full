@@ -176,6 +176,11 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         register_rl_routes(app)
     except Exception:
         pass
+    try:
+        from code_agent.dashboard.routes import register_dashboard_routes
+        register_dashboard_routes(app)
+    except Exception:
+        pass
     # Multi-channel webhooks (Python-native adapters)
     from code_agent.channels import MessageRouter, register_channel_webhooks
     _router = MessageRouter(agent_config)
