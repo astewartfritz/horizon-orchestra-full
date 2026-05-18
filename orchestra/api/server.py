@@ -128,8 +128,8 @@ def _make_jwt(payload: dict[str, Any], secret: str, algorithm: str, expire_minut
         import datetime as dt
         payload = {
             **payload,
-            "exp": dt.datetime.utcnow() + dt.timedelta(minutes=expire_minutes),
-            "iat": dt.datetime.utcnow(),
+            "exp": dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=expire_minutes),
+            "iat": dt.datetime.now(dt.timezone.utc),
             "jti": str(uuid.uuid4()),
         }
         return pyjwt.encode(payload, secret, algorithm=algorithm)

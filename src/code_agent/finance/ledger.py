@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from code_agent.finance.models import (
@@ -236,7 +236,7 @@ class Reconciliator:
             return None
         # Create a reconciliation adjustment entry
         return self.tx_engine.record_transaction(
-            date=as_of_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            date=as_of_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             description=f"Auto-reconciliation adjustment for {account_id}",
             entries=[
                 LedgerEntry(account_id=account_id, amount=abs(result["difference"]),

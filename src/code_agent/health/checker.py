@@ -46,7 +46,7 @@ class HealthChecker:
         self.root = Path(project_root).resolve()
 
     def run_all(self) -> HealthReport:
-        report = HealthReport(timestamp=datetime.datetime.utcnow().isoformat() + "Z")
+        report = HealthReport(timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z")
         report.checks.extend(self._check_python())
         report.checks.extend(self._check_disk())
         report.checks.extend(self._check_git())

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -48,7 +49,7 @@ class TenantManager:
             name=name,
             workspace=workspace or f"./workspaces/{name.lower().replace(' ', '-')}",
             api_key=f"ca_{uuid.uuid4().hex[:24]}",
-            created_at=__import__("datetime").datetime.utcnow().isoformat() + "Z",
+            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
         )
         self._save_tenant(tenant)
         Path(tenant.workspace).mkdir(parents=True, exist_ok=True)

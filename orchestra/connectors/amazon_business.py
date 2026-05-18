@@ -436,9 +436,9 @@ class AmazonBusinessConnector(Connector):
         if not bucket:
             return {"error": "bucket name is required"}
         try:
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
             cw = self._client("cloudwatch")
-            end = datetime.utcnow()
+            end = datetime.now(timezone.utc)
             start = end - timedelta(days=2)
             # BucketSizeBytes
             size_data = cw.get_metric_statistics(
@@ -557,9 +557,9 @@ class AmazonBusinessConnector(Connector):
         if not instance_id:
             return {"error": "instance_id is required"}
         try:
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
             cw = self._client("cloudwatch")
-            end = datetime.utcnow()
+            end = datetime.now(timezone.utc)
             start = end - timedelta(hours=24)
             data = cw.get_metric_statistics(
                 Namespace="AWS/EC2",

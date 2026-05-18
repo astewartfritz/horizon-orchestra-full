@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -76,8 +76,8 @@ class ModuleSaver:
             plan_template=plan_template,
             prompt_template=prompt_template,
             tags=tags or [],
-            created_at=datetime.utcnow().isoformat(),
-            updated_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
         )
         self._write_module(mod)
         return mod
@@ -89,7 +89,7 @@ class ModuleSaver:
         for k, v in kwargs.items():
             if hasattr(mod, k):
                 setattr(mod, k, v)
-        mod.updated_at = datetime.utcnow().isoformat()
+        mod.updated_at = datetime.now(timezone.utc).isoformat()
         self._write_module(mod)
         return mod
 
@@ -161,7 +161,7 @@ class ModuleSaver:
             error_pattern=error_text[:200],
             solution=solution,
             tags=tags or [],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         errors.append(pattern)
         self._save_errors(errors)

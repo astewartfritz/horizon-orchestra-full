@@ -132,7 +132,7 @@ class SIEMEvent:
 
     def __post_init__(self) -> None:
         if self.timestamp is None:
-            self.timestamp = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+            self.timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds") + "Z"
 
 
 # ── SIEM Exporter ────────────────────────────────────────────────────

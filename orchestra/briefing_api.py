@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 
 try:
     from fastapi import APIRouter, HTTPException, Depends, Header, status
-    from pydantic import BaseModel, EmailStr, validator
+    from pydantic import BaseModel, EmailStr, field_validator
     HAS_FASTAPI = True
 except ImportError:
     HAS_FASTAPI = False
@@ -56,7 +56,8 @@ if HAS_FASTAPI:
         send_hour_utc: int = 13
         topics: list[TopicRequest] = []
 
-        @validator("send_hour_utc")
+        @field_validator("send_hour_utc")
+        @classmethod
         def valid_hour(cls, v):
             if not 0 <= v <= 23:
                 raise ValueError("send_hour_utc must be 0-23")

@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ class HandoffAgent:
             try:
                 _ledger.log(event=f"handoff.{action}", data={
                     "patient_hash": hashlib.sha256(patient_id.encode()).hexdigest()[:16],
-                    "nurse_id": nurse_id, "timestamp": datetime.utcnow().isoformat(),
+                    "nurse_id": nurse_id, "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
             except Exception:
                 pass
@@ -164,7 +164,7 @@ class HandoffAgent:
             meds_due_next_4h=meds[:10],
             abnormal_labs=abnormal,
             care_plan_active=plan,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc),
             outgoing_nurse=outgoing_nurse,
         )
 
@@ -217,7 +217,7 @@ class HandoffAgent:
         high_acuity = sum(1 for r in reports if len(r.critical_pending) > 0)
 
         return UnitHandoffReport(
-            unit_id=unit_id, shift_date=datetime.utcnow(),
+            unit_id=unit_id, shift_date=datetime.now(timezone.utc),
             shift_type=shift_type, patient_reports=reports,
             unit_alerts=[], high_acuity_count=high_acuity,
             pending_admissions=0,

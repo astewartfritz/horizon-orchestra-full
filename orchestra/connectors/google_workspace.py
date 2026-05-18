@@ -776,8 +776,8 @@ class GoogleWorkspaceConnector(Connector):
         """Get Google Workspace usage report (Admin Reports API)."""
         date = params.get("date", "")
         if not date:
-            from datetime import datetime, timedelta
-            date = (datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%d")
+            from datetime import datetime, timedelta, timezone
+            date = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
         try:
             result = self._exec_api(
                 self._reports_service.userUsageReport().get(

@@ -167,7 +167,7 @@ class TestCircuitBreaker:
     def test_record_success(self):
         from orchestra.resilience.circuit_breaker import CircuitBreaker
         cb = CircuitBreaker()
-        cb.record_success("p", "m", 100)  # sync
+        _run(cb.record_success("p", "m", 100))
     def test_trips_after_failures(self):
         from orchestra.resilience.circuit_breaker import CircuitBreaker, CircuitState
         cb = CircuitBreaker()

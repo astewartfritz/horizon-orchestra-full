@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +28,8 @@ class Session:
         return cls(
             id=uuid.uuid4().hex[:12],
             task=task,
-            created_at=datetime.utcnow().isoformat(),
-            updated_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
             config={
                 "provider": config.llm.provider,
                 "model": config.llm.model,
@@ -46,7 +46,7 @@ class Session:
             "name": msg.name,
             "tool_calls": msg.tool_calls,
         })
-        self.updated_at = datetime.utcnow().isoformat()
+        self.updated_at = datetime.now(timezone.utc).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

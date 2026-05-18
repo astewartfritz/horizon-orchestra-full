@@ -19,7 +19,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -240,7 +240,7 @@ class ShiftScribeAgent:
                 _ledger.log(event=f"shift_scribe.{action}", data={
                     "patient_id_hash": hashlib.sha256(patient_id.encode()).hexdigest()[:16],
                     "nurse_id": nurse_id, "details": details,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
             except Exception as e:
                 logger.warning("AuditLedger unavailable: %s", e)
@@ -331,7 +331,7 @@ class ShiftScribeAgent:
 
         entry = FlowsheetEntry(
             patient_id=patient_id, nurse_id=nurse_id,
-            timestamp=datetime.utcnow(), vitals=vitals,
+            timestamp=datetime.now(timezone.utc), vitals=vitals,
             interventions=interventions or [], assessment_findings=findings or "",
         )
         abnormals = entry.validate_vitals()
@@ -346,8 +346,8 @@ class ShiftScribeAgent:
         self._audit("discharge", patient_id, nurse_id)
         return DischargeSummary(
             patient_id=patient_id, nurse_id=nurse_id,
-            admission_date=admission_context.get("admission_date", datetime.utcnow()),
-            discharge_date=datetime.utcnow(),
+            admission_date=admission_context.get("admission_date", datetime.now(timezone.utc)),
+            discharge_date=datetime.now(timezone.utc),
             primary_diagnosis=admission_context.get("primary_diagnosis", "See chart"),
             procedures=admission_context.get("procedures", []),
             medications_at_discharge=admission_context.get("discharge_meds", []),
@@ -377,7 +377,7 @@ class ShiftScribeAgent:
         content = (
             f"INCIDENT REPORT\n"
             f"Type: {incident_type}\n"
-            f"Date/Time: {datetime.utcnow().isoformat()}\n"
+            f"Date/Time: {datetime.now(timezone.utc).isoformat()}\n"
             f"Description: {description}\n"
             f"Witnesses: {', '.join(witnesses) if witnesses else 'None listed'}\n"
             f"Reporting nurse: {nurse_id}\n"

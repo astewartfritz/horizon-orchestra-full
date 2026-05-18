@@ -257,7 +257,8 @@ class TestOrchestraFleet:
         team = OrchestraTeam(TeamConfig(name="ephemeral"))
         tid = _run(fleet.add_team(team))
         _run(fleet.remove_team(tid))
-        assert fleet.get_team(tid) is None or _run(fleet.get_team(tid)) is None
+        result = _run(fleet.get_team(tid))
+        assert result is None
     def test_fleet_status(self):
         from orchestra.teams.fleet import OrchestraFleet, FleetConfig
         f = OrchestraFleet(FleetConfig())

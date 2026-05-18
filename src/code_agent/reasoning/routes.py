@@ -164,8 +164,8 @@ def register_reasoning_routes(app, prefix: str = "/api/reasoning"):
             task=task,
             strategy=resolved,
         )
-        from datetime import datetime
-        session.created_at = datetime.utcnow().isoformat()
+        from datetime import datetime, timezone
+        session.created_at = datetime.now(timezone.utc).isoformat()
         return {
             "task": task,
             "strategy": resolved,

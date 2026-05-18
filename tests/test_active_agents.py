@@ -227,8 +227,10 @@ class TestCodexAgent:
     def test_execute_no_cli_uses_api(self):
         a = CodexAgent(api_key="sk-test")
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "choices": [{"message": {"content": "def sort(): pass"}}]
+            "output": [{"content": [{"text": "def sort(): pass"}]}]
         }
 
         async def _run():
@@ -244,17 +246,69 @@ class TestCodexAgent:
         result = asyncio.run(_run())
         assert result.success is True
         assert "sort" in result.output
+        assert result.metadata.get("via") == "responses"
+
+    def test_execute_cli_permission_error_falls_back_to_api(self):
+        a = CodexAgent(api_key="sk-test")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "output": [{"content": [{"text": "fallback codex output"}]}]
+        }
+
+        async def _run():
+            with patch("shutil.which", return_value="/usr/bin/codex"):
+                with patch("asyncio.create_subprocess_exec", side_effect=PermissionError("Access is denied")):
+                    mock_client = AsyncMock()
+                    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                    mock_client.__aexit__ = AsyncMock(return_value=None)
+                    mock_client.post = AsyncMock(return_value=mock_resp)
+                    with patch("httpx.AsyncClient", return_value=mock_client):
+                        return await a.execute("write a sort function")
+
+        result = asyncio.run(_run())
+        assert result.success is True
+        assert "fallback codex output" in result.output
+
+    def test_execute_responses_404_falls_back_to_chat_completions(self):
+        a = CodexAgent(api_key="sk-test")
+        responses_resp = MagicMock()
+        responses_resp.status_code = 404
+        responses_resp.raise_for_status = MagicMock()
+        responses_resp.json.return_value = {"error": {"message": "not found"}}
+
+        chat_resp = MagicMock()
+        chat_resp.status_code = 200
+        chat_resp.raise_for_status = MagicMock()
+        chat_resp.json.return_value = {
+            "choices": [{"message": {"content": "def sort(): pass"}}]
+        }
+
+        async def _run():
+            with patch("shutil.which", return_value=None):
+                mock_client = AsyncMock()
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client.post = AsyncMock(side_effect=[responses_resp, chat_resp])
+                with patch("httpx.AsyncClient", return_value=mock_client):
+                    return await a.execute("write a sort function")
+
+        result = asyncio.run(_run())
+        assert result.success is True
+        assert result.metadata.get("via") == "chat_completions"
+        assert "sort" in result.output
 
     def test_execute_no_key_no_cli(self):
         a = CodexAgent(api_key="")
 
         async def _run():
-            with patch("shutil.which", return_value=None):
+            with patch.object(a, "_resolve_cli", return_value=None):
                 return await a.execute("task")
 
         result = asyncio.run(_run())
         assert result.success is False
-        assert "OPENAI_API_KEY" in result.error
+        assert "OPENAI_API_KEY" in result.error or "No OPENAI_API_KEY" in result.error
 
 
 # ---------------------------------------------------------------------------

@@ -384,7 +384,7 @@ class RunbookExecutor:
 # ── Helper ────────────────────────────────────────────────────────────
 
 def _now_iso() -> str:
-    return datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds") + "Z"
 
 
 def _elapsed_ms(start: float) -> float:

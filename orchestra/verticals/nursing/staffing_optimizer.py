@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ class StaffingOptimizerAgent:
             rationale = f"At minimum safe staffing. Ratio {actual_ratio:.1f}:1."
 
         return StaffingRecommendation(
-            unit_id=unit_id, shift=shift, date=datetime.utcnow(),
+            unit_id=unit_id, shift=shift, date=datetime.now(timezone.utc),
             current_census=census, total_acuity_score=round(total_acuity, 1),
             recommended_rn_count=recommended_rn, recommended_lpn_count=recommended_lpn,
             recommended_cna_count=recommended_cna, current_rn_scheduled=current_rn,

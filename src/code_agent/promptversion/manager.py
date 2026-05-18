@@ -36,7 +36,7 @@ class PromptVersionManager:
             name=name,
             content=content,
             version=next_version,
-            created_at=datetime.datetime.utcnow().isoformat() + "Z",
+            created_at=datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
             notes=notes,
             tags=tags or [],
         )

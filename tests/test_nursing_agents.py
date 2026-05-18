@@ -1,7 +1,7 @@
 """Tests for orchestra.verticals.nursing — 6 agents, 32 tools."""
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 
@@ -138,7 +138,7 @@ class TestMedReconciliationAgent(unittest.TestCase):
     def test_five_rights_all_pass(self):
         result = self.agent.check_five_rights(
             "pt-001", "metoprolol", "25mg", "oral",
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             {"confirmed_patient_id": "pt-001", "ordered_drug": "metoprolol", "ordered_dose": "25mg", "ordered_route": "oral"}
         )
         self.assertTrue(result.all_five_rights_pass)
@@ -147,7 +147,7 @@ class TestMedReconciliationAgent(unittest.TestCase):
     def test_five_rights_drug_mismatch(self):
         result = self.agent.check_five_rights(
             "pt-001", "lisinopril", "25mg", "oral",
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             {"ordered_drug": "metoprolol"}
         )
         self.assertFalse(result.all_five_rights_pass)
@@ -157,14 +157,14 @@ class TestMedReconciliationAgent(unittest.TestCase):
     def test_five_rights_high_alert_flagged(self):
         result = self.agent.check_five_rights(
             "pt-001", "heparin", "5000 units", "subq",
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             {"ordered_drug": "heparin", "ordered_dose": "5000 units", "ordered_route": "subq"}
         )
         self.assertTrue(any("HIGH-ALERT" in a for a in result.alerts))
 
     def test_five_rights_missing_fields_raises(self):
         with self.assertRaises(ValueError):
-            self.agent.check_five_rights("", "drug", "dose", "route", datetime.utcnow())
+            self.agent.check_five_rights("", "drug", "dose", "route", datetime.now(timezone.utc))
 
     def test_detect_interactions(self):
         interactions = self.agent.detect_interactions(["warfarin", "aspirin", "metformin"])
@@ -236,7 +236,7 @@ class TestEarlyWarningAgent(unittest.TestCase):
 
     def _make_vitals(self, **kwargs):
         defaults = {
-            "patient_id": "pt-001", "timestamp": datetime.utcnow(),
+            "patient_id": "pt-001", "timestamp": datetime.now(timezone.utc),
             "respiratory_rate": 16, "spo2": 97, "supplemental_oxygen": False,
             "hypercapnic_risk": False, "systolic_bp": 120, "heart_rate": 75,
             "consciousness": "alert", "temperature": 37.0,
@@ -291,7 +291,7 @@ class TestEarlyWarningAgent(unittest.TestCase):
         self.assertIn("Emergency", high)
 
     def test_trend_analysis_deteriorating(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         from orchestra.verticals.nursing.early_warning import NEWS2Score
         scores = [
             NEWS2Score("pt-001", now - timedelta(hours=4), 2, {}, "low", "", False),

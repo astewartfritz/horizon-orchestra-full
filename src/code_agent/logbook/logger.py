@@ -63,7 +63,7 @@ class AgentLogger:
         **extra: Any,
     ) -> LogEntry:
         entry = LogEntry(
-            timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
             level=level.value if isinstance(level, LogLevel) else level,
             message=message,
             module=module,

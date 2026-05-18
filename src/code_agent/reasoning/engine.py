@@ -4,7 +4,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -113,7 +113,7 @@ class ReasoningEngine:
         self.current_session = ReasoningSession(
             task=task,
             strategy=strategy_name,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
         trace = ThinkingTrace(strategy=strategy_name)
@@ -188,7 +188,7 @@ Think through this carefully before using any tools. Show your reasoning.
             return
         try:
             task_id = self.current_session.task.replace(" ", "_")[:40]
-            ts = datetime.utcnow().strftime("%H%M%S")
+            ts = datetime.now(timezone.utc).strftime("%H%M%S")
             path = self._trace_path(f"{task_id}_{ts}")
             path.write_text(
                 json.dumps(self.current_session.to_dict(), indent=2),

@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -173,7 +173,7 @@ class MedReconciliationAgent:
             try:
                 _ledger.log(event=f"med_rec.{action}", data={
                     "patient_hash": hashlib.sha256(patient_id.encode()).hexdigest()[:16],
-                    "drug": drug, "timestamp": datetime.utcnow().isoformat(),
+                    "drug": drug, "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
             except Exception:
                 pass
@@ -217,7 +217,7 @@ class MedReconciliationAgent:
             alerts.append(f"Route mismatch: ordered '{ordered_route}', presenting '{route}'")
 
         # Right Time
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         time_window_minutes = 30  # Standard ±30 min window
         time_diff = abs((now - scheduled_time).total_seconds()) / 60
         right_time = time_diff <= time_window_minutes

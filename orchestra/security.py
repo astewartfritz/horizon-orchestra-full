@@ -28,7 +28,7 @@ import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from .agent_loop import ToolCallEvent, ToolResultEvent
+from orchestra.agent_loop import ToolCallEvent, ToolResultEvent
 
 __all__ = [
     # Layer 1
