@@ -137,6 +137,23 @@ from code_agent.skills.base import SkillLibrary
 from code_agent.skills.manager import SkillManager
 from code_agent.skills.tool import SkillTool
 from code_agent.skills.v2 import SkillManagerV2, MetaPolicy, WebShopEnv, RLTrainer
+from code_agent.agentmesh import (
+    AgentRegistry, AgentInfo, AgentType, AgentStatus,
+    AgentNode, MeshNetwork, MeshRouter, MeshMessage, MessageType,
+)
+from code_agent.teams import (
+    TeamFactory, TeamFormationResult, TeamFormationStrategy,
+    AgentTeam, TeamLeader, TeamResult, TeamStatus,
+    SwarmCoordinator, SwarmResult,
+)
+from code_agent.workflow_v2 import (
+    DAGEngine, WorkflowManager, WorkflowInstance,
+    DAGWorkflow, BaseStep, AgentStep, ToolStep, TransformStep,
+    ParallelStep, ConditionStep, SwitchStep, LoopStep,
+    HumanHandoffStep, SubWorkflowStep,
+    DAGResult, WorkflowContext, StepStatus, WorkflowStatus,
+    parse_workflow, parse_workflow_json, parse_workflow_yaml, workflow_to_dict,
+)
 from code_agent import serving
 
 __all__ = [
@@ -253,4 +270,15 @@ __all__ = [
     "BuildProfile", "BuildTask", "BuildStep", "BuildResult", "Patch", "BuildMetrics",
     "BuildStatus", "BuildType", "Platform", "PatchStatus",
     "BuildProfileManager", "BuildEngine", "PatchManager", "BuildBrain",
+    "DAGEngine", "WorkflowManager", "WorkflowInstance",
+    "DAGWorkflow", "BaseStep", "AgentStep", "ToolStep", "TransformStep",
+    "ParallelStep", "ConditionStep", "SwitchStep", "LoopStep",
+    "HumanHandoffStep", "SubWorkflowStep",
+    "DAGResult", "WorkflowContext", "StepStatus", "WorkflowStatus",
+    "parse_workflow", "parse_workflow_json", "parse_workflow_yaml", "workflow_to_dict",
+    "AgentRegistry", "AgentInfo", "AgentType", "AgentStatus",
+    "AgentNode", "MeshNetwork", "MeshRouter", "MeshMessage", "MessageType",
+    "TeamFactory", "TeamFormationResult", "TeamFormationStrategy",
+    "AgentTeam", "TeamLeader", "TeamResult", "TeamStatus",
+    "SwarmCoordinator", "SwarmResult",
 ]

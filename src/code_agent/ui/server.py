@@ -126,6 +126,26 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         register_scaling_routes(app, redis_url="redis://localhost:6379/0")
     except Exception:
         pass
+    try:
+        from code_agent.agentmesh.routes import register_agentmesh_routes
+        register_agentmesh_routes(app)
+    except Exception:
+        pass
+    try:
+        from code_agent.teams.routes import register_teams_routes
+        register_teams_routes(app)
+    except Exception:
+        pass
+    try:
+        from code_agent.channels.gateway_routes import register_channel_gateway_routes
+        register_channel_gateway_routes(app)
+    except Exception:
+        pass
+    try:
+        from code_agent.workflow_v2.routes import register_workflow_v2_routes
+        register_workflow_v2_routes(app)
+    except Exception:
+        pass
     # Multi-channel webhooks (Python-native adapters)
     from code_agent.channels import MessageRouter, register_channel_webhooks
     _router = MessageRouter(agent_config)
