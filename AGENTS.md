@@ -12,8 +12,14 @@ orchestra/              # Legacy package (installed via pip install -e .)
   skills/               # Skill system (parsing, loading, registry, activation)
   model_council/        # Multi-model deliberation
 
-src/code_agent/         # New modules (workflow_v2, agentmesh, channels_v2, scaffold)
-  workflow_v2/          # DAG Workflow Engine v2
+src/code_agent/         # New modules
+  agentmesh/            # P2P agent mesh (registry, node, network, router, protocol, routes)
+  teams/                # Team formation + swarm (formation, team, swarm, routes)
+  channels/             # Channels v2 additions (health, formatter, retry, queue, gateway_routes)
+  workflow_v2/          # DAG Workflow Engine v2 + REST routes
+  reasoning/            # Reasoning strategies + REST routes (/api/reasoning/)
+  monitor/              # Metrics + alerting + REST routes (/api/monitor/)
+  telemetry/            # Agent tracing + REST routes (/api/telemetry/)
 
 tests/                  # All tests
 ```
@@ -44,7 +50,7 @@ Guardian and teams exports are always wrapped in `try/except ImportError`.
 
 ### Version
 - `orchestra/__init__.py` has `__version__` — keep in sync with `pyproject.toml`
-- Current: `0.4.0`
+- Current: `0.5.0`
 
 ### Git
 - Branch: `feature/structured-thinking`
