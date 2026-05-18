@@ -3,11 +3,14 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from code_agent.active_agents.base import AgentResult, AgentStatus
 from code_agent.active_agents.registry import ActiveAgentRegistry
 from code_agent.nemotron.classifier import ClassificationResult, NemotronClassifier
+
+if TYPE_CHECKING:
+    from code_agent.rl.policy import RoutingPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,7 @@ class RoutingDecision:
     selected_agent: str
     fallback_chain: list[str] = field(default_factory=list)
     health_filtered: bool = False
+    policy_applied: bool = False
     duration_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -26,6 +30,7 @@ class RoutingDecision:
             "selected_agent": self.selected_agent,
             "fallback_chain": self.fallback_chain,
             "health_filtered": self.health_filtered,
+            "policy_applied": self.policy_applied,
             "duration_ms": self.duration_ms,
         }
 
@@ -36,9 +41,14 @@ class NemotronRouter:
     Pipeline:
       1. Run health checks on all registered agents
       2. Filter to available/degraded agents
-      3. Ask NemotronClassifier to select the best agent for the task
-      4. Validate selection is healthy; fall back if not
-      5. Return RoutingDecision
+      3. [Optional] Apply RoutingPolicy priority boosts (learned from council feedback)
+      4. Ask NemotronClassifier to select the best agent for the task
+      5. Validate selection is healthy; fall back if not
+      6. Return RoutingDecision
+
+    The RoutingPolicy injects learned experience: agents that historically score
+    high for a given task category get their priority lowered (=preferred), so
+    Nemotron sees them as more attractive options — Orchestra gets smarter over time.
     """
 
     def __init__(
@@ -46,10 +56,12 @@ class NemotronRouter:
         registry: ActiveAgentRegistry,
         classifier: NemotronClassifier | None = None,
         confidence_threshold: float = 0.3,
+        policy: "RoutingPolicy | None" = None,
     ):
         self._registry = registry
         self._classifier = classifier or NemotronClassifier()
         self._confidence_threshold = confidence_threshold
+        self._policy = policy
 
     async def route(
         self,
@@ -71,6 +83,19 @@ class NemotronRouter:
             available = self._registry.all_agents()
 
         agent_dicts = [a.to_dict() for a in available]
+
+        # Apply learned priority boosts from RL policy
+        policy_applied = False
+        if self._policy is not None:
+            from code_agent.council.scorer import categorise_task
+            task_category = categorise_task(task)
+            for d in agent_dicts:
+                boost = self._policy.priority_boost(d["name"], task_category)
+                d["priority"] = d.get("priority", 50) + boost
+                policy_applied = True
+            # Re-sort by adjusted priority so classifier sees the learned preference
+            agent_dicts.sort(key=lambda d: d["priority"])
+
         classification = await self._classifier.classify(task, agent_dicts)
 
         # Validate Nemotron's choice is in our available set
@@ -101,6 +126,7 @@ class NemotronRouter:
             selected_agent=selected,
             fallback_chain=fallback_chain,
             health_filtered=health_filtered,
+            policy_applied=policy_applied,
             duration_ms=(time.time() - start) * 1000,
         )
 

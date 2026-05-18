@@ -60,6 +60,39 @@ All notable changes to Horizon Orchestra are documented here.
 
 ---
 
+## [0.7.0] — 2026-05-17
+
+### Added — Model Council (LLM-as-Judge evaluation)
+- **`LLMJudge`** — single LLM judge scoring outputs on 5 dimensions (correctness, completeness, clarity, efficiency, safety); supports Anthropic Claude Haiku, OpenAI GPT, and Ollama backends in auto-fallback order
+- **`ModelCouncil`** — runs N judges concurrently with `asyncio.gather`; aggregates per-dimension means; rejects outliers >2σ from group mean (requires ≥3 judges)
+- **`QualityGate`** — converts verdicts into reward signals (0.0–1.0); weighted scoring (correctness 35%, completeness 25%, clarity/efficiency 15% each, safety 10%); higher safety floor (min 7.0); fail penalty = 0.3×
+- **`categorise_task()`** — keyword-based 7-class task categoriser (coding, debugging, refactoring, analysis, testing, documentation, search)
+- **4 REST endpoints** at `/api/council/`: `POST /evaluate`, `POST /gate`, `GET /judges`, `GET /categorise`
+
+### Added — RL from Council Feedback (Orchestra learns over time)
+- **`TrainingSignal`** — structured experience tuple: task, agent, category, reward, council scores, pass/fail
+- **`ExperienceBuffer`** — SQLite-backed WAL-mode replay buffer; stores signals, queries by agent/category, extracts preference pairs (winner/loser) for DPO-style training; `clear(before_timestamp)` for pruning
+- **`RoutingPolicy`** — SQLite-backed EMA reward table per (agent, task_category); warm-start α for early samples; provides `priority_boost(agent, cat) → float` (negative = promote, positive = demote)
+- **`OrchestraTrainer`** — two training modes:
+  - **Policy table update** (always on): re-applies EMA from buffer, converges toward empirically best agents
+  - **LoRA fine-tuning** (optional, requires `transformers`+`peft`+`torch`): extracts preference pairs → DPO-style DistilBERT sequence classifier → saves to `.orchestra-lora/`
+- **`FeedbackLoop`** — fire-and-forget pipeline: dispatched record → council → gate → buffer → policy EMA; auto-triggers `OrchestraTrainer.train()` every N signals; never blocks the user response
+- **11 REST endpoints** at `/api/rl/`: buffer recent/stats/pairs/clear, policy table/rankings/summary/reset, train, train history
+
+### Wired into existing pipeline
+- **`NemotronRouter`** now accepts optional `RoutingPolicy`; applies learned priority boosts to agent dicts before Nemotron classification — high-reward agents float up, low-reward agents sink
+- **`NemotronDispatch`** now accepts optional `FeedbackLoop`; calls `loop.schedule(record)` after every dispatch (fire-and-forget)
+- **`nemotron/routes.py`** bootstraps the full RL-enabled pipeline by default: `RoutingPolicy` + `ExperienceBuffer` + `OrchestraTrainer` + `FeedbackLoop` + `NemotronRouter(policy=...)` + `NemotronDispatch(feedback_loop=...)`
+- **`server.py`** registers `/api/council/` and `/api/rl/` route modules
+
+### Stats
+- **+69 new tests** (35 council + 34 RL), total **1687 passing**
+- **+4 new Python packages** (`council`, `rl` — 11 source files)
+- **+15 new REST endpoints** across council and RL APIs
+- Full learning loop: every request makes Orchestra smarter for future similar tasks
+
+---
+
 ## [0.6.0] — 2026-05-17
 
 ### Added — Active Agents (autonomous agent drivers)

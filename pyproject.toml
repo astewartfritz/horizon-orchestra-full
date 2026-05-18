@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "horizon-orchestra"
-version = "0.6.0"
+version = "0.7.0"
 description = "Multi-model agentic AI harness with skills, browser automation, speech, billing, and Perplexity Computer parity"
 readme = "README.md"
 license = { text = "MIT" }

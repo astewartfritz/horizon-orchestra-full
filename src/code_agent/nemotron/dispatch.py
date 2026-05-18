@@ -3,10 +3,13 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from code_agent.active_agents.base import AgentResult
 from code_agent.nemotron.router import NemotronRouter, RoutingDecision
+
+if TYPE_CHECKING:
+    from code_agent.rl.loop import FeedbackLoop
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +36,25 @@ class DispatchRecord:
 class NemotronDispatch:
     """High-level dispatcher: receives a task, routes via Nemotron, executes, records outcome.
 
-    Maintains an in-memory history of recent dispatches for observability.
+    If a FeedbackLoop is attached, council evaluation runs asynchronously in the
+    background after each successful dispatch — the user response is never delayed.
+    Over time the routing policy learns which agents produce the best outputs.
     """
 
     def __init__(
         self,
         router: NemotronRouter,
         history_limit: int = 100,
+        feedback_loop: "FeedbackLoop | None" = None,
     ):
         self._router = router
         self._history: list[DispatchRecord] = []
         self._history_limit = history_limit
+        self._feedback_loop = feedback_loop
+
+    def attach_feedback_loop(self, loop: "FeedbackLoop") -> None:
+        """Attach (or replace) the feedback loop post-construction."""
+        self._feedback_loop = loop
 
     async def dispatch(
         self,
@@ -62,6 +73,11 @@ class NemotronDispatch:
             total_duration_ms=(time.time() - start) * 1000,
         )
         self._record(record)
+
+        # Fire-and-forget council evaluation → learning signal
+        if self._feedback_loop is not None:
+            self._feedback_loop.schedule(record)
+
         return record
 
     def _record(self, record: DispatchRecord) -> None:

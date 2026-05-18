@@ -11,8 +11,24 @@ from code_agent.nemotron.router import NemotronRouter
 def _build_dispatch() -> NemotronDispatch:
     registry = build_default_registry()
     classifier = NemotronClassifier()
-    router = NemotronRouter(registry, classifier)
-    return NemotronDispatch(router)
+
+    # Wire in RL routing policy so Nemotron benefits from past experience
+    try:
+        from code_agent.rl.policy import RoutingPolicy
+        from code_agent.rl.loop import FeedbackLoop
+        from code_agent.rl.buffer import ExperienceBuffer
+        from code_agent.rl.trainer import OrchestraTrainer
+        policy = RoutingPolicy()
+        router = NemotronRouter(registry, classifier, policy=policy)
+        buf = ExperienceBuffer()
+        trainer = OrchestraTrainer(buf, policy)
+        feedback = FeedbackLoop(buffer=buf, policy=policy, trainer=trainer)
+        dispatch = NemotronDispatch(router, feedback_loop=feedback)
+    except Exception:
+        router = NemotronRouter(registry, classifier)
+        dispatch = NemotronDispatch(router)
+
+    return dispatch
 
 
 _dispatch: NemotronDispatch | None = None
