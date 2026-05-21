@@ -78,6 +78,13 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         import logging as _lg
         _lg.getLogger("orchestra").warning("rate_limit middleware failed: %s", _e)
 
+    # Idle session timeout — inject 30-min timer into all HTML pages
+    try:
+        from orchestra.code_agent.ui.handlers.idle_timeout import IdleTimeoutMiddleware
+        app.add_middleware(IdleTimeoutMiddleware)
+    except Exception as _e:
+        _log.debug("Idle timeout middleware unavailable: %s", _e)
+
     # CSRF protection — after CORS, before all route handlers
     try:
         from orchestra.code_agent.ui.handlers.csrf import register_csrf_middleware

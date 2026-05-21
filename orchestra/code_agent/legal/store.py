@@ -19,6 +19,12 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
+def _strip(row, *exclude: str) -> dict:
+    """Convert a Row to dict, dropping internal columns."""
+    keys_to_drop = set(exclude) | {"created_by"}
+    return {k: v for k, v in dict(row).items() if k not in keys_to_drop}
+
+
 def init_db() -> None:
     with _conn() as c:
         c.executescript("""
@@ -31,7 +37,8 @@ def init_db() -> None:
             address TEXT DEFAULT '',
             client_since TEXT DEFAULT '',
             notes TEXT DEFAULT '',
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS matters (
             id TEXT PRIMARY KEY,
@@ -53,7 +60,8 @@ def init_db() -> None:
             statute_of_limitations TEXT DEFAULT '',
             opened_date TEXT DEFAULT '',
             closed_date TEXT DEFAULT '',
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS time_entries (
             id TEXT PRIMARY KEY,
@@ -94,6 +102,13 @@ def init_db() -> None:
             created_at TEXT NOT NULL
         );
         """)
+        # Idempotent: add created_by to existing tables
+        for _t in ("clients", "matters", "time_entries", "invoices"):
+            try:
+                c.execute(f"ALTER TABLE {_t} ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+                c.commit()
+            except Exception:
+                pass
 
 
 def _now() -> str:
@@ -106,7 +121,7 @@ def _today() -> str:
 
 # ── Clients ───────────────────────────────────────────────────────────────────
 
-def create_client(data: dict) -> Client:
+def create_client(data: dict, user_id: str = "") -> Client:
     c = Client(
         id=str(uuid.uuid4()),
         name=data["name"],
@@ -120,8 +135,9 @@ def create_client(data: dict) -> Client:
     )
     with _conn() as conn:
         conn.execute(
-            "INSERT INTO clients VALUES (?,?,?,?,?,?,?,?,?)",
-            (c.id, c.name, c.email, c.phone, c.company, c.address, c.client_since, c.notes, c.created_at),
+            """INSERT INTO clients (id,name,email,phone,company,address,client_since,notes,created_at,created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (c.id, c.name, c.email, c.phone, c.company, c.address, c.client_since, c.notes, c.created_at, user_id),
         )
     return c
 
@@ -129,19 +145,20 @@ def create_client(data: dict) -> Client:
 def get_client(client_id: str) -> Optional[Client]:
     with _conn() as conn:
         row = conn.execute("SELECT * FROM clients WHERE id=?", (client_id,)).fetchone()
-    return Client(**dict(row)) if row else None
+    return Client(**_strip(row)) if row else None
 
 
-def list_clients(search: str = "") -> list[Client]:
+def list_clients(search: str = "", user_id: str = "") -> list[Client]:
+    clauses, params = [], []
+    if user_id:
+        clauses.append("created_by=?"); params.append(user_id)
+    if search:
+        clauses.append("(name LIKE ? OR company LIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%"])
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     with _conn() as conn:
-        if search:
-            rows = conn.execute(
-                "SELECT * FROM clients WHERE name LIKE ? OR company LIKE ? ORDER BY name",
-                (f"%{search}%", f"%{search}%"),
-            ).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM clients ORDER BY name").fetchall()
-    return [Client(**dict(r)) for r in rows]
+        rows = conn.execute(f"SELECT * FROM clients {where} ORDER BY name", params).fetchall()
+    return [Client(**_strip(r)) for r in rows]
 
 
 def update_client(client_id: str, data: dict) -> Optional[Client]:
@@ -163,7 +180,7 @@ def _next_matter_number() -> str:
     return f"M-{n:05d}"
 
 
-def create_matter(data: dict) -> Matter:
+def create_matter(data: dict, user_id: str = "") -> Matter:
     m = Matter(
         id=str(uuid.uuid4()),
         matter_number=data.get("matter_number") or _next_matter_number(),
@@ -188,12 +205,17 @@ def create_matter(data: dict) -> Matter:
     )
     with _conn() as conn:
         conn.execute(
-            """INSERT INTO matters VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO matters
+               (id,matter_number,client_id,title,matter_type,status,fee_arrangement,
+                hourly_rate,flat_fee,contingency_pct,retainer_amount,retainer_balance,
+                responsible_attorney,description,opposing_party,court_jurisdiction,
+                statute_of_limitations,opened_date,closed_date,created_at,created_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (m.id, m.matter_number, m.client_id, m.title, m.matter_type, m.status,
              m.fee_arrangement, m.hourly_rate, m.flat_fee, m.contingency_pct,
              m.retainer_amount, m.retainer_balance, m.responsible_attorney,
              m.description, m.opposing_party, m.court_jurisdiction,
-             m.statute_of_limitations, m.opened_date, m.closed_date, m.created_at),
+             m.statute_of_limitations, m.opened_date, m.closed_date, m.created_at, user_id),
         )
     return m
 
@@ -201,11 +223,13 @@ def create_matter(data: dict) -> Matter:
 def get_matter(matter_id: str) -> Optional[Matter]:
     with _conn() as conn:
         row = conn.execute("SELECT * FROM matters WHERE id=?", (matter_id,)).fetchone()
-    return Matter(**dict(row)) if row else None
+    return Matter(**_strip(row)) if row else None
 
 
-def list_matters(status: str = "", client_id: str = "", search: str = "") -> list[Matter]:
+def list_matters(status: str = "", client_id: str = "", search: str = "", user_id: str = "") -> list[Matter]:
     wheres, params = [], []
+    if user_id:
+        wheres.append("created_by=?"); params.append(user_id)
     if status:
         wheres.append("status=?"); params.append(status)
     if client_id:
@@ -215,7 +239,7 @@ def list_matters(status: str = "", client_id: str = "", search: str = "") -> lis
     where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
     with _conn() as conn:
         rows = conn.execute(f"SELECT * FROM matters {where_sql} ORDER BY created_at DESC", params).fetchall()
-    return [Matter(**dict(r)) for r in rows]
+    return [Matter(**_strip(r)) for r in rows]
 
 
 def update_matter(matter_id: str, data: dict) -> Optional[Matter]:

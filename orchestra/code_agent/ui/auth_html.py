@@ -90,6 +90,7 @@ body {
     <button type="submit" class="btn-primary">Sign In</button>
   </form>
   <div class="footer">
+    <a href="/forgot-password" style="display:block;margin-bottom:8px">Forgot your password?</a>
     Don't have an account? <a href="/signup">Create one</a>
   </div>
 </div>
@@ -194,6 +195,126 @@ body {
     Already have an account? <a href="/login">Sign in</a>
   </div>
 </div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Forgot-password page — requests a reset code by email.
+# ---------------------------------------------------------------------------
+
+FORGOT_PASSWORD_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reset Password — Orchestra</title>
+<script src="https://unpkg.com/htmx.org@2.0.0"></script>
+<style>
+:root {
+  --bg-primary:#0d1117;--bg-secondary:#161b22;--bg-tertiary:#1c2128;
+  --border:#30363d;--text-primary:#e6edf3;--text-secondary:#8b949e;
+  --text-link:#58a6ff;--accent-blue:#1f6feb;--accent-blue-hover:#388bfd;
+  --accent-green:#238636;--accent-red:#da3633;
+  --radius-md:8px;--radius-lg:12px;
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-lg);padding:40px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.logo{text-align:center;margin-bottom:32px}
+.logo h1{font-size:28px;font-weight:700;background:linear-gradient(135deg,#58a6ff,#3fb950);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo p{color:var(--text-secondary);font-size:14px;margin-top:4px}
+.form-group{margin-bottom:20px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px}
+.form-group input{width:100%;padding:10px 14px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text-primary);font-size:14px;outline:none;transition:border-color .15s}
+.form-group input:focus{border-color:var(--accent-blue)}
+.btn-primary{width:100%;padding:12px;background:var(--accent-blue);color:#fff;border:none;border-radius:var(--radius-md);font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-primary:hover{background:var(--accent-blue-hover)}
+.msg{padding:12px 14px;border-radius:var(--radius-md);font-size:13px;margin-bottom:16px;display:none}
+.msg.error{background:rgba(218,54,51,.12);border:1px solid rgba(218,54,51,.3);color:#f85149}
+.msg.success{background:rgba(35,134,54,.12);border:1px solid rgba(35,134,54,.3);color:#3fb950}
+.footer{text-align:center;margin-top:24px;font-size:13px;color:var(--text-secondary)}
+.footer a{color:var(--text-link);text-decoration:none}
+#step2{display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><h1>Orchestra</h1><p>Reset your password</p></div>
+  <div id="msg" class="msg"></div>
+
+  <div id="step1">
+    <form id="reqForm">
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <button type="submit" class="btn-primary">Send Reset Code</button>
+    </form>
+  </div>
+
+  <div id="step2">
+    <form id="resetForm">
+      <div class="form-group">
+        <label for="code">Reset Code</label>
+        <input type="text" id="code" name="code" placeholder="6-digit code from email" required maxlength="6" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label for="newpw">New Password</label>
+        <input type="password" id="newpw" name="newpw" placeholder="At least 8 characters" required autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn-primary">Set New Password</button>
+    </form>
+  </div>
+
+  <div class="footer"><a href="/login">Back to Sign In</a></div>
+</div>
+<script>
+function showMsg(text, type) {
+  const m = document.getElementById('msg');
+  m.textContent = text; m.className = 'msg ' + type; m.style.display = 'block';
+}
+document.getElementById('reqForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = document.getElementById('email').value;
+  const r = await fetch('/v1/auth/forgot-password', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({email})
+  });
+  const d = await r.json();
+  if (d.data) {
+    showMsg('Check your email for a 6-digit code.', 'success');
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+  } else {
+    showMsg(d.error || 'Something went wrong', 'error');
+  }
+});
+document.getElementById('resetForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const code = document.getElementById('code').value;
+  const password = document.getElementById('newpw').value;
+  const r = await fetch('/v1/auth/reset-password', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({code, password})
+  });
+  const d = await r.json();
+  if (d.data) {
+    showMsg('Password updated! Redirecting to login…', 'success');
+    setTimeout(() => window.location.href = '/login', 1500);
+  } else {
+    showMsg(d.error || 'Invalid or expired code', 'error');
+  }
+});
+// Pre-fill code from URL ?code=
+const params = new URLSearchParams(location.search);
+if (params.get('code')) {
+  document.getElementById('code').value = params.get('code');
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'block';
+}
+</script>
 </body>
 </html>"""
 

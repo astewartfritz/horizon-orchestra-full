@@ -1,0 +1,64 @@
+# fly.toml — Orchestra deployment config for horizon-orchestra.com
+#
+# Setup steps:
+#   1. fly launch --name horizon-orchestra --region iad  (first time only)
+#   2. fly secrets set JWT_SECRET=$(openssl rand -hex 32) \
+#                      API_KEY_ENCRYPTION_KEY=$(openssl rand -hex 32) \
+#                      CORS_ORIGINS=https://horizon-orchestra.com,https://www.horizon-orchestra.com
+#   3. fly deploy
+#   4. fly certs add horizon-orchestra.com   (enables HTTPS on your domain)
+#   5. In GoDaddy DNS: add a CNAME record: @ -> horizon-orchestra.fly.dev
+#      or add A record pointing to the IP shown by: fly ips list
+
+app = "horizon-orchestra"
+primary_region = "iad"
+kill_signal = "SIGINT"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile.fly"
+
+[env]
+  ORCHESTRA_ENV = "production"
+  ORCHESTRA_HOST = "0.0.0.0"
+  ORCHESTRA_PORT = "8000"
+  ORCHESTRA_LOG_LEVEL = "info"
+  ORCHESTRA_PROVIDER = "anthropic"
+  ORCHESTRA_MODEL = "claude-sonnet-4-6"
+  ORCHESTRA_JSON_LOGS = "true"
+  RATE_LIMIT_ENABLED = "true"
+  ORCHESTRA_WORKSPACE = "/data"
+  ORCHESTRA_SESSION_DIR = "/data/sessions"
+  ORCHESTRA_DB = "/data/orchestra.db"
+  ORCHESTRA_BILLING_DB = "/data/orchestra_billing.db"
+  ORCHESTRA_APP_NAME = "Orchestra"
+  ORCHESTRA_APP_URL = "https://horizon-orchestra.com"
+  SESSION_IDLE_TIMEOUT = "1800"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+[[http_service.checks]]
+  grace_period = "15s"
+  interval = "20s"
+  method = "GET"
+  path = "/api/health"
+  timeout = "5s"
+
+[[mounts]]
+  source = "orchestra_data"
+  destination = "/data"
+  initial_size = "3gb"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

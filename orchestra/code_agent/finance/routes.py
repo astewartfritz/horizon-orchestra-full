@@ -19,14 +19,27 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
     from orchestra.code_agent.finance import portfolio as pf
     pf.init_db()
 
-    tx_engine = TransactionEngine()
-    ledger = LedgerEngine(tx_engine)
+    # Per-user engine instances — finance data is isolated per authenticated user
+    _engines: dict[str, TransactionEngine] = {}
+    _ledgers: dict[str, LedgerEngine] = {}
+
+    def _get_engine(uid: str) -> TransactionEngine:
+        if uid not in _engines:
+            _engines[uid] = TransactionEngine()
+            _ledgers[uid] = LedgerEngine(_engines[uid])
+        return _engines[uid]
+
     formula = FormulaEngine()
     analytics = AnalyticsEngine()
-    brain = FinanceBrain(tx_engine, analytics, formula)
     event_bus = EventBus()
 
     router = APIRouter(prefix=prefix)
+
+    from fastapi import Depends, Request
+    from orchestra.code_agent.ui.handlers.user_dep import optional_user_id
+
+    def _engine(uid: str | None = Depends(optional_user_id)) -> TransactionEngine:
+        return _get_engine(uid or "_anonymous")
 
     @router.get("/health")
     async def health():
@@ -35,9 +48,9 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
     # ── Accounts ─────────────────────────
 
     @router.post("/accounts")
-    async def create_account(body: dict[str, Any]):
+    async def create_account(body: dict[str, Any], eng: TransactionEngine = Depends(_engine)):
         from orchestra.code_agent.finance.models import AccountType
-        acc = tx_engine.create_account(
+        acc = eng.create_account(
             code=body["code"],
             name=body["name"],
             type=AccountType(body["type"]),
@@ -46,9 +59,9 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
         return {"id": acc.id, "code": acc.code, "name": acc.name, "type": acc.type.value}
 
     @router.get("/accounts")
-    async def list_accounts():
+    async def list_accounts(eng: TransactionEngine = Depends(_engine)):
         return {aid: {"code": a.code, "name": a.name, "type": a.type.value}
-                for aid, a in tx_engine.accounts.items()}
+                for aid, a in eng.accounts.items()}
 
     @router.get("/accounts/{account_id}/balance")
     async def account_balance(account_id: str):

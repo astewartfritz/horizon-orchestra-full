@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from orchestra.code_agent.legal import store as st
@@ -15,17 +15,19 @@ def register_legal_routes(app: FastAPI) -> None:
 
     st.init_db()
 
+    from orchestra.code_agent.ui.handlers.user_dep import optional_user_id
+
     # ── Clients ───────────────────────────────────────────────────────────────
 
     @app.get("/api/legal/clients")
-    async def list_clients(search: str = ""):
-        return [vars(c) for c in st.list_clients(search=search)]
+    async def list_clients(search: str = "", uid: str | None = Depends(optional_user_id)):
+        return [vars(c) for c in st.list_clients(search=search, user_id=uid or "")]
 
     @app.post("/api/legal/clients")
-    async def create_client(body: dict):
+    async def create_client(body: dict, uid: str | None = Depends(optional_user_id)):
         if not body.get("name"):
             raise HTTPException(400, "name required")
-        return vars(st.create_client(body))
+        return vars(st.create_client(body, user_id=uid or ""))
 
     @app.get("/api/legal/clients/{client_id}")
     async def get_client(client_id: str):
@@ -44,14 +46,17 @@ def register_legal_routes(app: FastAPI) -> None:
     # ── Matters ───────────────────────────────────────────────────────────────
 
     @app.get("/api/legal/matters")
-    async def list_matters(status: str = "", client_id: str = "", search: str = ""):
-        return [vars(m) for m in st.list_matters(status=status, client_id=client_id, search=search)]
+    async def list_matters(
+        status: str = "", client_id: str = "", search: str = "",
+        uid: str | None = Depends(optional_user_id),
+    ):
+        return [vars(m) for m in st.list_matters(status=status, client_id=client_id, search=search, user_id=uid or "")]
 
     @app.post("/api/legal/matters")
-    async def create_matter(body: dict):
+    async def create_matter(body: dict, uid: str | None = Depends(optional_user_id)):
         if not body.get("client_id") or not body.get("title"):
             raise HTTPException(400, "client_id and title required")
-        return vars(st.create_matter(body))
+        return vars(st.create_matter(body, user_id=uid or ""))
 
     @app.get("/api/legal/matters/{matter_id}")
     async def get_matter(matter_id: str):

@@ -17,6 +17,8 @@ import threading
 from fastapi import FastAPI, Form, Header, Request
 from fastapi.responses import JSONResponse, Response
 
+from orchestra.code_agent.settings import settings as _settings
+
 _log = logging.getLogger("orchestra.v1_compat")
 
 # ---------------------------------------------------------------------------
@@ -167,7 +169,7 @@ def register_v1_compat_routes(app: FastAPI) -> None:
 
     def _set_session_cookie(resp: Response, token: str) -> None:
         resp.set_cookie(key="session", value=token, httponly=True, max_age=604800,
-                        samesite="lax", secure=False)
+                        samesite="lax", secure=_settings.env == "production")
 
     async def _extract_creds(request: Request) -> tuple[str, str, str]:
         ctype = request.headers.get("content-type", "")
@@ -348,6 +350,45 @@ def register_v1_compat_routes(app: FastAPI) -> None:
         import asyncio as _asyncio
         _asyncio.create_task(_run())
         return JSONResponse(_wrap({"task_id": task_id, "status": "running"}))
+
+    # ── Password reset ────────────────────────────────────────────────────────
+    @app.post("/v1/auth/forgot-password")
+    async def v1_forgot_password(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        email = body.get("email", "").strip().lower()
+        if not email or not _EMAIL_RE.match(email):
+            return JSONResponse(_wrap(error="Valid email required"), status_code=422)
+        user = _store.get_user_by_email(email)
+        if user:
+            from orchestra.code_agent.auth.email import EmailService, _reset_db
+            svc = EmailService()
+            code = svc.generate_code(6)
+            _reset_db.create(user["id"], email, code, expires_in=3600)
+            svc.send_password_reset(email, code, user.get("name", ""))
+        # Always 200 — don't leak whether the email exists
+        return JSONResponse(_wrap({"message": "If that email is registered, a reset code has been sent"}))
+
+    @app.post("/v1/auth/reset-password")
+    async def v1_reset_password(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        code = body.get("code", "").strip()
+        new_password = body.get("password", "")
+        if not code:
+            return JSONResponse(_wrap(error="Reset code required"), status_code=422)
+        if len(new_password) < 8:
+            return JSONResponse(_wrap(error="Password must be at least 8 characters"), status_code=422)
+        from orchestra.code_agent.auth.email import _reset_db
+        user_id = _reset_db.consume(code)
+        if not user_id:
+            return JSONResponse(_wrap(error="Invalid or expired reset code"), status_code=400)
+        _store.update_user(user_id, password_hash=_pw.hash(new_password))
+        return JSONResponse(_wrap({"message": "Password updated — please log in"}))
 
     # ── Task status ──────────────────────────────────────────────────────────
     @app.get("/v1/tasks/{task_id}")
