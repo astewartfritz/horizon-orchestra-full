@@ -1,3 +1,17 @@
+# Orchestra — Claude Code Instructions
+
+> Full project context, production architecture, and coding standards are in **ORCHESTRA.md**.
+> This file contains directives for Claude Code (the AI assistant).
+
+## Quick Reference
+
+- **Start server**: `python entrypoint.py` or `python run.py` (not `uvicorn` directly — no top-level `app`)
+- **Run tests**: `pytest tests/ -v` or `pytest tests/test_integration_core.py -v`
+- **Settings**: copy `.env.example` to `.env`, set `JWT_SECRET` and `API_KEY_ENCRYPTION_KEY`
+- **Architecture docs**: See `ORCHESTRA.md`
+
+---
+
 # Code Agent — Architecture & Design Philosophy
 
 This document explains why this project is structured the way it is. Use it as your mental model when building, extending, or debugging.
