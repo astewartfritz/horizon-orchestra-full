@@ -12,6 +12,71 @@
       "env": {
         "AUTH_TOKEN": "agp_019d6ea4-7015-7a62-a7e0-a25f19c62a05"
       }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "description": "Read/write files and list directories in the workspace"
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "description": "Fetch web pages and HTTP resources"
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "Persistent knowledge graph and memory store"
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "description": "Browser automation — screenshots, scraping, UI testing"
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "orchestra.db"],
+      "description": "Query and manage a local SQLite database"
+    },
+    "brave_search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "description": "Web and news search via Brave Search API (requires BRAVE_API_KEY)"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub repos, issues, PRs, and code search (requires GITHUB_TOKEN)"
+    },
+    "tavily": {
+      "command": "npx",
+      "args": ["-y", "tavily-mcp@0.1.3"],
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      },
+      "description": "AI-optimised web search via Tavily (requires TAVILY_API_KEY)"
+    },
+    "exa": {
+      "command": "npx",
+      "args": ["-y", "exa-mcp-server"],
+      "env": {
+        "EXA_API_KEY": "${EXA_API_KEY}"
+      },
+      "description": "Neural search and content retrieval via Exa (requires EXA_API_KEY)"
+    },
+    "google_maps": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-google-maps"],
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "${GOOGLE_MAPS_API_KEY}"
+      },
+      "description": "Geocoding, directions, and places via Google Maps (requires GOOGLE_MAPS_API_KEY)"
     }
   }
 }

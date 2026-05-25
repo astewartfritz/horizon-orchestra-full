@@ -21,8 +21,24 @@ src/code_agent/         # New modules
   monitor/              # Metrics + alerting + REST routes (/api/monitor/)
   telemetry/            # Agent tracing + REST routes (/api/telemetry/)
 
+orchestra_science/      # AI-for-science subsystem (separate pip-installable package)
+  ingestion/            # PubChem, RDKit, BioPython, PyMOL data ingestion
+  analysis/             # Cheminformatics, bioinformatics, scientific visualization
+  workflows/            # Molecular docking + literature review DAG pipelines
+  reporting/            # Lab report, research paper, protocol generation
+  server/               # FastAPI router at /api/science/* (register_science_routes)
+  integration/          # ScienceAdapter bridges to main orchestra
+
+knowledge/              # Hardware architecture plans
+  horizon-orion.md      # Horizon Orion — custom LLM silicon specifications
+
 tests/                  # All tests
+  test_orchestra_science/  # 37 tests for the science subsystem
 ```
+
+## Hardware Knowledge
+
+The `knowledge/` directory contains architectural specifications for Horizon Orion chips — custom parallel compute devices optimized for LLM inference/training. When asked about hardware, silicon, chips, or the Orion project, read `knowledge/horizon-orion.md` first. The mission is to design and fabricate custom silicon that minimizes data movement per token using dataflow architectures.
 
 ## Conventions
 
@@ -50,7 +66,7 @@ Guardian and teams exports are always wrapped in `try/except ImportError`.
 
 ### Version
 - `orchestra/__init__.py` has `__version__` — keep in sync with `pyproject.toml`
-- Current: `0.5.0`
+- Current: `0.8.0`
 
 ### Git
 - Branch: `feature/structured-thinking`
