@@ -316,3 +316,9 @@
 {"trace_id": "d2104772", "span_id": "78c037b6", "parent_id": "", "name": "s1", "start_time": 1779667430.7285137, "end_time": 1779667430.7354486, "attributes": {}, "status": "ok"}
 {"trace_id": "1c9a8a56", "span_id": "de9bab2a", "parent_id": "", "name": "fail-span", "start_time": 1779667430.7612343, "end_time": 1779667430.7690098, "attributes": {}, "status": "error"}
 {"trace_id": "1f01779c", "span_id": "e01cec0f", "parent_id": "", "name": "s", "start_time": 1779667430.9018705, "end_time": 1779667430.9088385, "attributes": {}, "status": "ok"}
+{"trace_id": "c53a44da", "span_id": "6b0797de", "parent_id": "", "name": "s1", "start_time": 1779727891.0531337, "end_time": 1779727891.0597851, "attributes": {}, "status": "ok"}
+{"trace_id": "b6ed282a", "span_id": "9d3a0773", "parent_id": "", "name": "fail-span", "start_time": 1779727891.1081722, "end_time": 1779727891.1166463, "attributes": {}, "status": "error"}
+{"trace_id": "7b58b305", "span_id": "43f91dee", "parent_id": "", "name": "s", "start_time": 1779727891.2569418, "end_time": 1779727891.2663395, "attributes": {}, "status": "ok"}
+{"trace_id": "c13b52dd", "span_id": "09c205e8", "parent_id": "", "name": "s1", "start_time": 1779728238.4687767, "end_time": 1779728238.4839451, "attributes": {}, "status": "ok"}
+{"trace_id": "c6eaf80b", "span_id": "eb606c6e", "parent_id": "", "name": "fail-span", "start_time": 1779728238.53027, "end_time": 1779728238.539618, "attributes": {}, "status": "error"}
+{"trace_id": "e3173b1b", "span_id": "0ecd0213", "parent_id": "", "name": "s", "start_time": 1779728238.7552254, "end_time": 1779728238.773648, "attributes": {}, "status": "ok"}
