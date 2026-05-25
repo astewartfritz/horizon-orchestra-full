@@ -10,12 +10,14 @@
   <!-- Favicon: Orchestra mark -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='32' y2='32' gradientUnits='userSpaceOnUse'><stop stop-color='%238282F7'/><stop offset='1' stop-color='%2300C9B8'/></linearGradient></defs><path d='M6 23C6 14 11 8 18 8c4 0 7 2 8 5' stroke='url(%23g)' stroke-width='2.5' fill='none' stroke-linecap='round'/><circle cx='18' cy='22' r='3.2' fill='url(%23g)'/><circle cx='26' cy='13' r='1.8' fill='%2300C9B8'/></svg>" />
 
-  <link rel="stylesheet" href="css/base.css?v=1776540992" />
-  <link rel="stylesheet" href="css/layout.css?v=1776540992" />
-  <link rel="stylesheet" href="css/components.css?v=1776540992" />
-  <link rel="stylesheet" href="css/chat.css?v=1776540992" />
-  <link rel="stylesheet" href="css/animations.css?v=1776540992" />
-  <link rel="stylesheet" href="css/responsive.css?v=1776540992" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+
+  <script>window.ORCH_API = window.location.origin;</script>
 </head>
 <body>
   <div class="app">
@@ -26,27 +28,34 @@
     </main>
   </div>
 
+  <!-- Toast notifications -->
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- First-run onboarding overlay -->
+  <div id="onboarding-overlay" class="ob-overlay" role="dialog" aria-modal="true" aria-label="Setup wizard">
+    <div id="onboarding-panel" class="ob-panel"></div>
+  </div>
+
   <!-- Load order matters: data + icons first, then components, then pages, then app -->
-  <script src="assets/icons.js?v=1776540992"></script>
-  <script src="js/data/mock.js?v=1776540992"></script>
+  <script src="assets/icons.js"></script>
+  <script src="js/data/mock.js"></script>
 
-  <script src="js/components/codediff.js?v=1776540992"></script>
-  <script src="js/components/terminal.js?v=1776540992"></script>
-  <script src="js/components/checklist.js?v=1776540992"></script>
-  <script src="js/components/message.js?v=1776540992"></script>
-  <script src="js/components/cards.js?v=1776540992"></script>
-  <script src="js/components/sidebar.js?v=1776540992"></script>
-  <script src="js/components/topbar.js?v=1776540992"></script>
+  <script src="js/components/codediff.js"></script>
+  <script src="js/components/terminal.js"></script>
+  <script src="js/components/checklist.js"></script>
+  <script src="js/components/message.js"></script>
+  <script src="js/components/cards.js"></script>
+  <script src="js/components/sidebar.js"></script>
+  <script src="js/components/topbar.js"></script>
 
-  <script src="js/pages/home.js?v=1776540992"></script>
-  <script src="js/pages/chat.js?v=1776540992"></script>
-  <script src="js/pages/agents.js?v=1776540992"></script>
-  <script src="js/pages/tasks.js?v=1776540992"></script>
-  <script src="js/pages/settings.js?v=1776540992"></script>
-  <script src="js/pages/verticals.js?v=1776540992"></script>
-  <script src="js/pages/coordination.js?v=1776540992"></script>
-  <script src="js/pages/tools.js?v=1776540992"></script>
+  <script src="js/pages/home.js"></script>
+  <script src="js/pages/chat.js"></script>
+  <script src="js/pages/agents.js"></script>
+  <script src="js/pages/tasks.js"></script>
+  <script src="js/pages/terminal.js"></script>
+  <script src="js/pages/settings.js"></script>
+  <script src="js/pages/onboarding.js"></script>
 
-  <script src="js/app.js?v=1776540992"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

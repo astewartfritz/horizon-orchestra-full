@@ -1,52 +1,28 @@
-// Orchestra — Top bar
+// Orchestra — Top bar (with live notification polling)
 (function () {
   const { icons } = window;
+  const API = window.ORCH_API || 'http://localhost:3000';
+
+  let notifCount = 0;
+  let lastSeen = Date.now() / 1000 - 1;
+  const notifHistory = [];
+  let notifOpen = false;
+  let pollInterval = null;
 
   const pageTitles = {
-    '#/':           { parent: 'Workspace',    current: 'Home' },
-    '#/chat':       { parent: 'Workspace',    current: 'Chat' },
-    '#/tasks':      { parent: 'Workspace',    current: 'Tasks' },
-    '#/agents':     { parent: 'Intelligence', current: 'Agents' },
-    '#/verticals':  { parent: 'Intelligence', current: 'Verticals' },
-    '#/coord':      { parent: 'Intelligence', current: 'Coordination' },
-    '#/tools':      { parent: 'Intelligence', current: 'Tools' },
-    '#/settings':   { parent: 'System',       current: 'Settings' },
+    '#/':         { parent: 'Workspace', current: 'Home' },
+    '#/chat':     { parent: 'Workspace', current: 'Chat' },
+    '#/tasks':    { parent: 'Workspace', current: 'Tasks' },
+    '#/agents':   { parent: 'Intelligence', current: 'Agents' },
+    '#/coord':    { parent: 'Intelligence', current: 'Coordination' },
+    '#/tools':    { parent: 'Intelligence', current: 'Tools' },
+    '#/terminal': { parent: 'System', current: 'Terminal' },
+    '#/settings': { parent: 'System', current: 'Settings' },
   };
 
-  // BUG 4: Notification data
-  const NOTIFICATIONS = [
-    {
-      icon: 'file',
-      color: '#F5B971',
-      text: 'ContractReview flagged 3 risks in NorthPeak MSA',
-      time: '2m ago',
-      href: '#/tasks',
-    },
-    {
-      icon: 'beaker',
-      color: '#00C9B8',
-      text: 'AutoResearch swarm completed: 4 improvements found',
-      time: '15m ago',
-      href: '#/tasks',
-    },
-    {
-      icon: 'shield',
-      color: '#F0596A',
-      text: 'NEWS2 Alert: Patient pt-0847 score ≥7 — RRT activated',
-      time: '1h ago',
-      href: '#/agents',
-    },
-    {
-      icon: 'github',
-      color: '#6E6EF5',
-      text: 'GitHub push: commit abc1234 to main (14 files)',
-      time: '3h ago',
-      href: '#/tasks',
-    },
-  ];
-
-  let notifOpen  = false;
-  let avatarOpen = false;
+  function badgeAttr() {
+    return notifCount > 0 ? `data-badge="${Math.min(notifCount, 99)}" class="icon-btn has-badge"` : 'class="icon-btn"';
+  }
 
   function render() {
     const el = document.querySelector('.topbar');
@@ -77,22 +53,14 @@
 
       <div class="topbar__right" style="position:relative">
         <button class="icon-btn" aria-label="New task" title="New task">${icons.plus(16)}</button>
-
-        <!-- BUG 4: Notification bell -->
-        <div style="position:relative" data-notif-root>
-          <button class="icon-btn has-badge" data-badge="4" aria-label="Notifications" data-action="toggle-notif">
-            ${icons.bell(18)}
-          </button>
-          <!-- notification dropdown rendered dynamically -->
+        <div style="position:relative">
+          <button ${badgeAttr()} data-notif-bell aria-label="Notifications">${icons.bell(18)}</button>
+          <div class="notif-dropdown${notifOpen ? ' is-open' : ''}" id="notif-dropdown">
+            ${renderNotifDropdown()}
+          </div>
         </div>
-
         <button class="icon-btn" aria-label="Settings" title="Settings" data-goto="#/settings">${icons.settings(17)}</button>
-
-        <!-- BUG 5: User avatar -->
-        <div style="position:relative" data-avatar-root>
-          <button class="avatar" aria-label="Account" data-action="toggle-avatar">${MOCK.user.initials}</button>
-          <!-- avatar dropdown rendered dynamically -->
-        </div>
+        <button class="avatar" aria-label="Account">${MOCK.user.initials}</button>
       </div>
     `;
 
@@ -102,175 +70,130 @@
     el.querySelector('[data-goto="#/settings"]').addEventListener('click', () => {
       location.hash = '#/settings';
     });
-
-    // BUG 4: Wire notification bell
-    el.querySelector('[data-action="toggle-notif"]').addEventListener('click', (e) => {
+    el.querySelector('[data-notif-bell]').addEventListener('click', (e) => {
       e.stopPropagation();
       notifOpen = !notifOpen;
-      avatarOpen = false;
-      renderDropdowns();
+      if (notifOpen) {
+        notifCount = 0;
+        updateBadge();
+      }
+      const dd = document.getElementById('notif-dropdown');
+      if (dd) {
+        dd.classList.toggle('is-open', notifOpen);
+        dd.innerHTML = renderNotifDropdown();
+        wireNotifDropdown(dd);
+      }
     });
-
-    // BUG 5: Wire avatar button
-    el.querySelector('[data-action="toggle-avatar"]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      avatarOpen = !avatarOpen;
-      notifOpen = false;
-      renderDropdowns();
-    });
-
-    // Close on outside click
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('[data-notif-root]') && !e.target.closest('[data-avatar-root]')) {
-        if (notifOpen || avatarOpen) {
-          notifOpen = false;
-          avatarOpen = false;
-          renderDropdowns();
-        }
+    document.addEventListener('click', () => {
+      if (notifOpen) {
+        notifOpen = false;
+        const dd = document.getElementById('notif-dropdown');
+        if (dd) dd.classList.remove('is-open');
       }
     });
   }
 
-  function renderDropdowns() {
-    renderNotifDropdown();
-    renderAvatarDropdown();
-  }
-
   function renderNotifDropdown() {
-    const root = document.querySelector('[data-notif-root]');
-    if (!root) return;
-    // Remove existing dropdown
-    root.querySelector('.topbar-dropdown')?.remove();
-    if (!notifOpen) return;
-
-    const d = document.createElement('div');
-    d.className = 'topbar-dropdown';
-    d.style.cssText = `
-      position:absolute;top:calc(100% + 8px);right:0;width:340px;
-      background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg);
-      box-shadow:var(--shadow-lg);z-index:300;overflow:hidden
-    `;
-    d.innerHTML = `
-      <div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-subtle)">
-        <div style="font-size:14px;font-weight:600">Notifications</div>
-        <span class="badge badge--accent">${NOTIFICATIONS.length}</span>
-      </div>
-      ${NOTIFICATIONS.map((n, i) => `
-        <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;transition:background var(--dur);border-bottom:${i < NOTIFICATIONS.length-1 ? '1px solid var(--border-subtle)' : 'none'}" class="notif-item" data-notif-href="${n.href}">
-          <div style="width:30px;height:30px;border-radius:var(--r-sm);background:rgba(${hexColor(n.color)},0.14);color:${n.color};display:grid;place-items:center;flex-shrink:0;margin-top:1px">
-            ${icons[n.icon] ? icons[n.icon](14) : icons.sparkles(14)}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;color:var(--text);line-height:1.45;margin-bottom:3px">${escapeHTML(n.text)}</div>
-            <div style="font-size:11px;color:var(--text-3)">${icons.clock(10)} ${escapeHTML(n.time)}</div>
-          </div>
-        </div>`).join('')}
-      <div style="padding:10px 16px;border-top:1px solid var(--border-subtle)">
-        <button style="font-size:12.5px;color:var(--text-2);cursor:pointer;width:100%;text-align:center;transition:color var(--dur)" data-mark-all-read>Mark all read</button>
-      </div>
-    `;
-    root.appendChild(d);
-
-    // Wire notification clicks
-    d.querySelectorAll('.notif-item').forEach(item => {
-      item.addEventListener('mouseenter', () => item.style.background = 'var(--bg-3)');
-      item.addEventListener('mouseleave', () => item.style.background = '');
-      item.addEventListener('click', () => {
-        notifOpen = false;
-        renderDropdowns();
-        location.hash = item.dataset.notifHref;
-      });
-    });
-    d.querySelector('[data-mark-all-read]')?.addEventListener('click', () => {
-      notifOpen = false;
-      renderDropdowns();
-      window.Orchestra.toast('All notifications marked as read', 'success');
-    });
-  }
-
-  function renderAvatarDropdown() {
-    const root = document.querySelector('[data-avatar-root]');
-    if (!root) return;
-    root.querySelector('.topbar-dropdown')?.remove();
-    if (!avatarOpen) return;
-
-    const d = document.createElement('div');
-    d.className = 'topbar-dropdown';
-    d.style.cssText = `
-      position:absolute;top:calc(100% + 8px);right:0;width:240px;
-      background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg);
-      box-shadow:var(--shadow-lg);z-index:300;overflow:hidden
-    `;
-    d.innerHTML = `
-      <!-- User info -->
-      <div style="padding:14px 16px;border-bottom:1px solid var(--border-subtle)">
-        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">Ashton Fritz</div>
-        <div style="font-size:12px;color:var(--text-3)">ashtonfritz3@gmail.com</div>
-      </div>
-
-      <!-- Menu items -->
-      <div style="padding:6px">
-        <button class="avatar-menu-item" data-goto="#/settings">
-          ${icons.user(14)} Profile
-        </button>
-        <button class="avatar-menu-item" data-action="shortcuts">
-          ${icons.command(14)} Keyboard Shortcuts
-        </button>
-        <button class="avatar-menu-item" style="justify-content:space-between">
-          <span style="display:flex;align-items:center;gap:10px">${icons.sparkles(14)} Theme</span>
-          <span class="badge badge--accent" style="height:18px;font-size:10px">Dark</span>
-        </button>
-        <div style="height:1px;background:var(--border-subtle);margin:6px 0"></div>
-        <button class="avatar-menu-item" style="color:var(--danger)" data-action="signout">
-          ${icons.logout(14)} Sign Out
-        </button>
-      </div>
-    `;
-    root.appendChild(d);
-
-    // Add hover styles
-    d.querySelectorAll('.avatar-menu-item').forEach(item => {
-      item.style.cssText += `
-        display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;
-        border-radius:var(--r-sm);font-size:13px;color:var(--text-2);
-        cursor:pointer;transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
-        background:none;border:none;text-align:left;
+    if (notifHistory.length === 0) {
+      return `
+        <div class="notif-dropdown__header">Notifications</div>
+        <div class="notif-dropdown__empty">No recent notifications.</div>
       `;
-      item.addEventListener('mouseenter', () => { item.style.background = 'var(--bg-3)'; item.style.color = 'var(--text)'; });
-      item.addEventListener('mouseleave', () => { item.style.background = ''; item.style.color = item.dataset.goto ? 'var(--text-2)' : (item.dataset.action === 'signout' ? 'var(--danger)' : 'var(--text-2)'); });
-    });
-
-    d.querySelector('[data-goto="#/settings"]')?.addEventListener('click', () => {
-      avatarOpen = false;
-      renderDropdowns();
-      location.hash = '#/settings';
-    });
-    d.querySelector('[data-action="shortcuts"]')?.addEventListener('click', () => {
-      avatarOpen = false;
-      renderDropdowns();
-      window.Orchestra.toast('Keyboard shortcuts: ⌘K search · ⇧Enter newline · Esc close panels', 'info');
-    });
-    d.querySelector('[data-action="signout"]')?.addEventListener('click', () => {
-      avatarOpen = false;
-      renderDropdowns();
-      window.Orchestra.toast('Signed out (demo — no actual auth)', 'info');
-    });
+    }
+    return `
+      <div class="notif-dropdown__header">
+        <span>Notifications</span>
+        <button class="btn btn--subtle btn--sm" data-action="clear-notifs">Clear</button>
+      </div>
+      <div class="notif-dropdown__list">
+        ${notifHistory.slice(0, 15).map(n => `
+          <div class="notif-item ${n.status === 'failed' ? 'notif-item--error' : ''}">
+            <div class="notif-item__icon">${n.status === 'complete' ? '✓' : '✗'}</div>
+            <div class="notif-item__body">
+              <div class="notif-item__title">${escapeHTML(n.title || 'Task update')}</div>
+              <div class="notif-item__body-text">${escapeHTML((n.body || '').slice(0, 70))}</div>
+              ${n.duration ? `<div class="notif-item__meta">${n.duration}s</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
   }
 
-  function hexColor(hex) {
-    const r = parseInt(hex.slice(1,3), 16);
-    const g = parseInt(hex.slice(3,5), 16);
-    const b = parseInt(hex.slice(5,7), 16);
-    return `${r},${g},${b}`;
+  function wireNotifDropdown(dd) {
+    const clearBtn = dd.querySelector('[data-action="clear-notifs"]');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        notifHistory.length = 0;
+        notifCount = 0;
+        updateBadge();
+        dd.innerHTML = renderNotifDropdown();
+      });
+    }
   }
 
   function escapeHTML(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function updateBadge() {
+    const bell = document.querySelector('[data-notif-bell]');
+    if (!bell) return;
+    if (notifCount > 0) {
+      bell.setAttribute('data-badge', Math.min(notifCount, 99));
+      bell.classList.add('has-badge');
+    } else {
+      bell.removeAttribute('data-badge');
+      bell.classList.remove('has-badge');
+    }
+  }
+
+  async function pollNotifications() {
+    try {
+      const r = await fetch(`${API}/v1/notifications?user_id=default&since=${lastSeen}`, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) return;
+      const items = await r.json();
+      if (!Array.isArray(items) || items.length === 0) return;
+
+      items.forEach(n => {
+        notifHistory.unshift(n);
+        notifCount++;
+        lastSeen = Math.max(lastSeen, n.completed_at || lastSeen);
+
+        if (window.Orchestra?.toast) {
+          const isOk = n.status === 'complete';
+          window.Orchestra.toast.show(
+            isOk ? `Done: ${(n.body || '').slice(0, 60)}` : `Failed: ${(n.body || '').slice(0, 60)}`,
+            isOk ? 'success' : 'error',
+            5000
+          );
+        }
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            new Notification('Orchestra — ' + (n.status === 'complete' ? 'Task complete' : 'Task failed'), {
+              body: (n.body || '').slice(0, 100),
+            });
+          } catch(e) {}
+        }
+      });
+      notifHistory.splice(20);
+      updateBadge();
+    } catch (e) {}
+  }
+
+  function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    setTimeout(pollNotifications, 5000);
+    pollInterval = setInterval(pollNotifications, 15000);
+  }
+
+  function stopPolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
   }
 
   function setTitle(hash) {
-    const bare = hash.split('?')[0];
-    const info = pageTitles[bare] || pageTitles['#/'];
+    const info = pageTitles[hash] || pageTitles['#/'];
     const parent = document.querySelector('[data-topbar-parent]');
     const current = document.querySelector('[data-topbar-current]');
     if (parent) parent.textContent = info.parent;
@@ -278,5 +201,5 @@
   }
 
   window.Orchestra = window.Orchestra || {};
-  window.Orchestra.topbar = { render, setTitle };
+  window.Orchestra.topbar = { render, setTitle, startPolling, stopPolling };
 })();

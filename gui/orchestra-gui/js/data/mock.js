@@ -392,10 +392,10 @@ describe('token bucket', () => {
 
   // Models
   MOCK.models = [
-    { id: 'kimi-25', name: 'Kimi K2.5',  desc: 'Long-context reasoning, 1M tokens',    selected: true },
-    { id: 'claude-opus', name: 'Claude Opus 4',  desc: 'Best for agentic coding' },
-    { id: 'gpt-54', name: 'GPT-5.4',     desc: 'General purpose, fast' },
-    { id: 'gemma-4', name: 'Gemma 4 Pro', desc: 'Open weights, local fallback' },
+    { id: 'claude-sonnet-4-6',  name: 'Claude Sonnet 4.6', desc: 'Claude Code backbone — fast, precise', selected: true },
+    { id: 'claude-opus-4-7',    name: 'Claude Opus 4.7',   desc: 'Most capable — best for hard tasks' },
+    { id: 'kimi-25',            name: 'Kimi K2.5',         desc: 'Long-context reasoning, 1M tokens' },
+    { id: 'gemma-4',            name: 'Gemma 4 Pro',       desc: 'Open weights, local fallback' },
   ];
 
   // Integrations (settings page)

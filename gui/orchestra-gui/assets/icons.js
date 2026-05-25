@@ -97,6 +97,8 @@ const icons = {
   beaker: (s=14)=>`${svgOpen(s)}<path d="M9 3h6M10 3v8L4 21h16L14 11V3"/></svg>`,
   graph: (s=14)=>`${svgOpen(s)}<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>`,
   users: (s=14)=>`${svgOpen(s)}<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5M16 14c3 0 5 2 5 5"/></svg>`,
+  sun:  (s=18)=>`${svgOpen(s)}<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,
+  moon: (s=18)=>`${svgOpen(s)}<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
 };
 
 // Global exposure for non-module scripts

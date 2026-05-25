@@ -13,6 +13,7 @@
     { id: 'coord',    label: 'Coordination',icon: 'coord',    href: '#/coord' },
     { id: 'tools',    label: 'Tools',       icon: 'tools',    href: '#/tools' },
     { group: 'System' },
+    { id: 'terminal', label: 'Terminal',    icon: 'terminal', href: '#/terminal' },
     { id: 'settings', label: 'Settings',    icon: 'settings', href: '#/settings' },
   ];
 
@@ -65,9 +66,9 @@
       document.querySelector('.app').classList.toggle('collapsed');
     });
 
-    // Wire MILES button (opens chat)
+    // Wire MILES button → dedicated MILES page
     el.querySelector('[data-action="open-miles"]').addEventListener('click', () => {
-      location.hash = '#/chat';
+      location.hash = '#/miles';
     });
   }
 
@@ -75,12 +76,15 @@
     // normalize: '#/chat' -> 'chat', '' or '#/' -> 'home'
     let key = (path || '').replace(/^#\//, '').split(/[?&]/)[0] || 'home';
     if (key === '') key = 'home';
-    // map aliases: coord -> coord, tools -> tools, etc.
+    // map aliases
     const aliasMap = { 'coord': 'coord', 'tools': 'tools', 'verticals': 'verticals' };
     if (aliasMap[key]) key = aliasMap[key];
     document.querySelectorAll('.nav-item').forEach(el => {
       el.classList.toggle('is-active', el.dataset.nav === key);
     });
+    // Highlight the MILES button when on the MILES page
+    const milesBtn = document.querySelector('[data-action="open-miles"]');
+    if (milesBtn) milesBtn.classList.toggle('is-active', key === 'miles');
   }
 
   window.Orchestra = window.Orchestra || {};

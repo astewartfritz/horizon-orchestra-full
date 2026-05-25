@@ -95,3 +95,78 @@
   opacity: 0;
   animation: fadeIn 480ms var(--ease) forwards;
 }
+
+/* =============================================================
+   Higgsfield-inspired dynamic animation keyframes
+   ============================================================= */
+
+@keyframes aurora {
+  0%   { background-position: 0% 50%, 100% 50%, 50% 0%; }
+  33%  { background-position: 100% 0%, 0% 100%, 0% 50%; }
+  66%  { background-position: 50% 100%, 50% 0%, 100% 50%; }
+  100% { background-position: 0% 50%, 100% 50%, 50% 0%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50%       { transform: translateY(-10px) rotate(0.4deg); }
+}
+
+/* @property needed for conic-gradient rotation */
+@property --grad-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes orbitGrad {
+  to { --grad-angle: 360deg; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 8px var(--glow-color, rgba(110,110,245,.3)); }
+  50%       { box-shadow: 0 0 22px var(--glow-color, rgba(110,110,245,.6)), 0 0 48px rgba(110,110,245,.12); }
+}
+
+@keyframes cinematicIn {
+  from { opacity: 0; transform: scale(.97) translateY(10px); filter: blur(5px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0);    filter: blur(0);   }
+}
+
+@keyframes auroraText {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes liquidFlow {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes ripple {
+  from { transform: scale(0); opacity: .5; }
+  to   { transform: scale(3.5); opacity: 0; }
+}
+
+@keyframes neonFlicker {
+  0%, 94%, 100% { opacity: 1; }
+  95%            { opacity: .6; }
+  97%            { opacity: .9; }
+}
+
+@keyframes scanPulse {
+  0%, 100% { opacity: 0; transform: scaleX(0); }
+  50%       { opacity: 1; transform: scaleX(1); }
+}
+
+/* Utility classes for new keyframes */
+.anim-cinematic-in   { animation: cinematicIn 550ms var(--ease) both; }
+.anim-float          { animation: float 4s ease-in-out infinite; }
+.anim-float-slow     { animation: floatSlow 7s ease-in-out infinite; }
+.anim-glow-pulse     { animation: glowPulse 2.5s ease-in-out infinite; }

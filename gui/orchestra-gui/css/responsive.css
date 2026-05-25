@@ -79,3 +79,73 @@
 @media (min-width: 1600px) {
   .page__inner { max-width: 1360px; }
 }
+
+/* ── New component mobile overrides ────────────────────────── */
+
+/* Toast: full-width on small screens */
+@media (max-width: 720px) {
+  #toast-container {
+    bottom: var(--s-4);
+    right: var(--s-3);
+    left: var(--s-3);
+    width: auto;
+    max-width: none;
+  }
+  .toast { font-size: 13px; }
+}
+
+/* Notification dropdown: full-width on small screens */
+@media (max-width: 480px) {
+  .notif-dropdown {
+    width: calc(100vw - var(--s-4) * 2);
+    right: calc(-1 * var(--s-3));
+  }
+}
+
+/* Error block: tighter layout on mobile */
+@media (max-width: 720px) {
+  .error-block { flex-direction: column; gap: var(--s-2); }
+  .error-block__icon { width: 24px; height: 24px; }
+  .error-block__actions { flex-wrap: wrap; }
+}
+
+/* Onboarding: full screen on small phones */
+@media (max-width: 560px) {
+  .ob-overlay { padding: 0; align-items: flex-end; }
+  .ob-panel {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    max-width: 100%;
+    padding: var(--s-6) var(--s-5) var(--s-8);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .ob-prompts { grid-template-columns: 1fr; }
+  .ob-icon { width: 48px; height: 48px; }
+  .ob-title { font-size: 20px; }
+}
+
+/* Settings page: stack nav + body on mobile */
+@media (max-width: 720px) {
+  .page--settings [style*="grid-template-columns:220px"] {
+    grid-template-columns: 1fr !important;
+  }
+  .page--settings nav[style*="position:sticky"] {
+    position: static !important;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: var(--s-1);
+    padding-bottom: var(--s-3);
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--s-4);
+    -webkit-overflow-scrolling: touch;
+  }
+  .page--settings .nav-item { flex-shrink: 0; }
+}
+
+/* Composer: ensure sticky bottom on mobile */
+@media (max-width: 720px) {
+  .composer { position: sticky; bottom: 0; background: var(--bg-0); padding-bottom: var(--s-5); }
+  .composer__footer { display: none; }
+  .composer__chip span:not(.icon) { display: none; }
+}
