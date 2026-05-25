@@ -60,7 +60,8 @@ class PipelineConfig:
     # Chunking
     chunk_strategy: ChunkStrategy | str = ChunkStrategy.RECURSIVE
     chunk_size: int = 512
-    chunk_overlap: int = 50
+    chunk_overlap: int = 64   # ~12.5% overlap; was 50
+    min_chunk_size: int = 20  # micro-fragments below this are merged
 
     # Vector store backend
     store_backend: Literal["memory", "pgvector", "pinecone", "supabase"] = "memory"
@@ -171,6 +172,7 @@ class EmbeddingPipeline:
             default_chunk_size=self.config.chunk_size,
             default_overlap=self.config.chunk_overlap,
             default_strategy=self.config.chunk_strategy,
+            min_chunk_size=self.config.min_chunk_size,
         )
 
         # Resolve model dimensions
