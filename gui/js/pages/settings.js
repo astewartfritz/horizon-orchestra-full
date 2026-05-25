@@ -1,10 +1,15 @@
 // Orchestra — Settings page
 (function () {
   const { icons } = window;
+  const API = window.ORCH_API || 'http://localhost:3000';
 
   let state = {
     tab: 'profile',
-    showKey: false,
+    apiKeys: null,    // null = loading, {} = loaded {anthropic, openai, openrouter}
+    apiInputs: {},    // {provider: inputValue}
+    apiSaving: {},    // {provider: bool}
+    usage: null,
+    tiers: null,
   };
 
   function escapeHTML(s) {
@@ -20,6 +25,67 @@
     { id: 'security',      label: 'Security' },
   ];
 
+  // ── Data loaders ────────────────────────────────────────────────────────────
+  async function loadApiKeys() {
+    try {
+      const r = await fetch(`${API}/v1/config/keys`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      state.apiKeys = await r.json();
+    } catch (e) {
+      state.apiKeys = { error: true };
+    }
+    if (state.tab === 'api') repaintBody();
+  }
+
+  function providerPayload(provider, value) {
+    const map = { anthropic: 'anthropic_api_key', openai: 'openai_api_key', openrouter: 'openrouter_api_key' };
+    return { [map[provider] || (provider + '_api_key')]: value.trim() };
+  }
+
+  async function saveApiKey(provider, value) {
+    if (!value.trim()) return;
+    state.apiSaving[provider] = true;
+    repaintBody();
+    try {
+      const r = await fetch(`${API}/v1/config/keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(providerPayload(provider, value)),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (window.Orchestra?.toast) window.Orchestra.toast.show(`${capitalize(provider)} key saved`, 'success', 3000);
+      state.apiInputs[provider] = '';
+      // Refresh key status
+      const status = await fetch(`${API}/v1/config/keys`).then(x => x.json()).catch(() => null);
+      if (status) state.apiKeys = status;
+    } catch (e) {
+      if (window.Orchestra?.toast) window.Orchestra.toast.show(`Failed to save ${provider} key`, 'error', 4000);
+    } finally {
+      state.apiSaving[provider] = false;
+      repaintBody();
+    }
+  }
+
+  async function loadUsage() {
+    try {
+      const [usageRes, tiersRes] = await Promise.all([
+        fetch(`${API}/v1/usage/dashboard`, { signal: AbortSignal.timeout(8000) }),
+        fetch(`${API}/v1/billing/tiers`, { signal: AbortSignal.timeout(8000) }),
+      ]);
+      state.usage = usageRes.ok ? await usageRes.json() : { error: true };
+      state.tiers = tiersRes.ok ? await tiersRes.json() : null;
+    } catch (e) {
+      state.usage = { error: true };
+    }
+    if (state.tab === 'subscription') repaintBody();
+  }
+
+  function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   function render() {
     return `
       <div class="page page--settings">
@@ -61,6 +127,11 @@
     }
   }
 
+  function repaintBody() {
+    const body = document.querySelector('[data-settings-body]');
+    if (body) { body.innerHTML = renderBody(); wireBody(); }
+  }
+
   function renderProfile() {
     return `
       <div class="card" style="padding:28px">
@@ -87,7 +158,7 @@
           <div class="field"><label>Email</label><input class="input" value="${escapeHTML(window.MOCK.user.email)}"/></div>
           <div class="field"><label>Role</label><input class="input" value="Head of AI Platform"/></div>
           <div class="field" style="grid-column:1/-1"><label>Bio</label>
-            <textarea class="input" style="height:80px;padding:10px 12px;line-height:1.5" placeholder="Tell Orchestra a bit about how you work…">Prefers concise output with linked evidence. Reviews agent diffs before approval. Based in Brooklyn, NY.</textarea>
+            <textarea class="input" style="height:80px;padding:10px 12px;line-height:1.5" placeholder="Tell Orchestra a bit about how you work…">Prefers concise output with linked evidence. Reviews agent diffs before approval.</textarea>
           </div>
         </div>
 
@@ -100,53 +171,173 @@
   }
 
   function renderApi() {
-    const masked = '••••••••••••••••••••••••••••r7Bq';
-    const revealed = 'sk-orch-7a2f84Qb9c1d3eKm0f2gH4iJ8lN6Or7Bq';
+    if (!state.apiKeys) {
+      return `
+        <div class="card" style="padding:28px">
+          <h3>API keys</h3>
+          <p style="color:var(--text-2);font-size:13px;margin-top:6px;margin-bottom:24px">Keys let Orchestra call AI providers on your behalf. They are stored server-side and never exposed to the browser.</p>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-3);padding:20px 0">
+            <div class="spinner" style="width:16px;height:16px;border:2px solid var(--border-subtle);border-top-color:var(--accent);border-radius:999px;animation:spin 0.7s linear infinite"></div>
+            Loading key status…
+          </div>
+        </div>`;
+    }
+
+    if (state.apiKeys.error) {
+      return `
+        <div class="card" style="padding:28px">
+          <h3>API keys</h3>
+          <p style="color:var(--text-2);font-size:13px;margin-top:6px;margin-bottom:16px">Keys let Orchestra call AI providers on your behalf.</p>
+          <div class="error-block">
+            <div class="error-block__icon">${icons.alertTriangle ? icons.alertTriangle(15) : '⚠'}</div>
+            <div class="error-block__body">
+              <div class="error-block__title">Could not load key status</div>
+              <div class="error-block__hint">Make sure the Orchestra server is running: <code>python run.py</code></div>
+            </div>
+          </div>
+          <button class="btn btn--ghost" style="margin-top:16px" data-action="reload-keys">Try again</button>
+        </div>`;
+    }
+
+    const providers = [
+      { id: 'anthropic',  label: 'Anthropic', desc: 'Powers Claude models (claude-3-5-sonnet, claude-3-opus, etc.)', placeholder: 'sk-ant-…' },
+      { id: 'openai',     label: 'OpenAI',    desc: 'Powers GPT-4o, GPT-4-turbo, and o3 models.',                  placeholder: 'sk-…' },
+      { id: 'openrouter', label: 'OpenRouter', desc: 'Unified access to 100+ models via a single key.',             placeholder: 'sk-or-…' },
+    ];
+
     return `
       <div class="card" style="padding:28px">
         <h3>API keys</h3>
-        <p style="color:var(--text-2);font-size:13px;margin-top:6px;margin-bottom:20px">Keys grant agents access to Orchestra on your behalf. Rotate immediately if exposed.</p>
+        <p style="color:var(--text-2);font-size:13px;margin-top:6px;margin-bottom:24px">Keys let Orchestra call AI providers on your behalf. They are stored server-side and never exposed to the browser.</p>
 
-        <div style="padding:18px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border-subtle);margin-bottom:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:32px;height:32px;border-radius:8px;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center">${icons.key(14)}</div>
-              <div>
-                <div style="font-weight:500">Production key</div>
-                <div style="font-size:11.5px;color:var(--text-3)">Created Mar 04 · Last used 2m ago</div>
-              </div>
-            </div>
-            <span class="badge badge--success">Active</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <code style="flex:1;padding:8px 12px;background:var(--bg-0);border-radius:6px;font-size:12.5px;color:var(--text);border:1px solid var(--border-subtle);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${state.showKey ? revealed : masked}</code>
-            <button class="icon-btn" data-toggle-key title="${state.showKey ? 'Hide' : 'Reveal'}">${state.showKey ? icons.eyeOff(14) : icons.eye(14)}</button>
-            <button class="icon-btn" title="Copy">${icons.copy(14)}</button>
-            <button class="icon-btn" style="color:var(--danger)" title="Revoke">${icons.trash(14)}</button>
-          </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          ${providers.map(p => {
+            const isSet = !!state.apiKeys[p.id];
+            const saving = !!state.apiSaving[p.id];
+            const inputVal = state.apiInputs[p.id] || '';
+            return `
+              <div style="padding:18px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border-subtle)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:${isSet ? 'var(--accent-dim)' : 'var(--bg-3)'};color:${isSet ? 'var(--accent)' : 'var(--text-3)'};display:grid;place-items:center">${icons.key(14)}</div>
+                    <div>
+                      <div style="font-weight:500">${escapeHTML(p.label)}</div>
+                      <div style="font-size:11.5px;color:var(--text-3)">${escapeHTML(p.desc)}</div>
+                    </div>
+                  </div>
+                  ${isSet
+                    ? `<span class="badge badge--success">Connected</span>`
+                    : `<span class="badge">Not set</span>`}
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input
+                    class="input"
+                    type="password"
+                    placeholder="${isSet ? '••••••••••••••••••••••••' : escapeHTML(p.placeholder)}"
+                    value="${escapeHTML(inputVal)}"
+                    data-key-input="${p.id}"
+                    style="flex:1;font-family:var(--font-mono);font-size:12.5px"
+                    autocomplete="off"
+                  />
+                  <button
+                    class="btn btn--primary btn--sm"
+                    data-save-key="${p.id}"
+                    ${saving || !inputVal.trim() ? 'disabled' : ''}
+                  >${saving ? 'Saving…' : isSet ? 'Update' : 'Save'}</button>
+                </div>
+              </div>`;
+          }).join('')}
         </div>
 
-        <div style="padding:18px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border-subtle);margin-bottom:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:32px;height:32px;border-radius:8px;background:var(--bg-3);color:var(--text-2);display:grid;place-items:center">${icons.key(14)}</div>
-              <div>
-                <div style="font-weight:500">Staging key</div>
-                <div style="font-size:11.5px;color:var(--text-3)">Created Feb 11 · Last used 1d ago</div>
-              </div>
-            </div>
-            <span class="badge">Active</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <code style="flex:1;padding:8px 12px;background:var(--bg-0);border-radius:6px;font-size:12.5px;color:var(--text);border:1px solid var(--border-subtle);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">••••••••••••••••••••••••••••Kq2x</code>
-            <button class="icon-btn">${icons.eye(14)}</button>
-            <button class="icon-btn">${icons.copy(14)}</button>
-            <button class="icon-btn" style="color:var(--danger)">${icons.trash(14)}</button>
-          </div>
+        <div style="margin-top:20px;padding:14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border-subtle);font-size:12.5px;color:var(--text-3)">
+          ${icons.lock ? icons.lock(13) : '🔒'} Keys are written to a <code>.env</code> file on the server and loaded at runtime. They are never logged or returned to the browser.
         </div>
-
-        <button class="btn btn--ghost" style="margin-top:8px">${icons.plus(14)} Create new key</button>
       </div>
+    `;
+  }
+
+  function renderSubscription() {
+    if (!state.usage) {
+      return `
+        <div class="card" style="padding:28px">
+          <h3>Subscription &amp; Usage</h3>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-3);padding:20px 0">
+            <div class="spinner" style="width:16px;height:16px;border:2px solid var(--border-subtle);border-top-color:var(--accent);border-radius:999px;animation:spin 0.7s linear infinite"></div>
+            Loading usage data…
+          </div>
+        </div>`;
+    }
+
+    const u = state.usage;
+    const tiers = state.tiers || [];
+    const jobs = u.jobs_total || 0;
+    const byStatus = u.jobs_by_status || {};
+    const done = byStatus.complete || 0;
+    const failed = byStatus.failed || 0;
+    const avgDur = u.avg_duration_seconds != null ? u.avg_duration_seconds.toFixed(1) : '—';
+    const computeHrs = u.total_compute_seconds != null ? (u.total_compute_seconds / 3600).toFixed(1) : '—';
+
+    const doneRate = jobs > 0 ? Math.round((done / jobs) * 100) : 0;
+
+    return `
+      <div class="card" style="padding:28px;margin-bottom:16px">
+        <h3 style="margin-bottom:4px">Usage this month</h3>
+        <p style="color:var(--text-2);font-size:13px;margin-bottom:20px">Live data from your Orchestra server.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+          <div style="padding:16px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border-subtle)">
+            <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Total jobs</div>
+            <div style="font-size:28px;font-weight:600;margin-top:6px">${jobs.toLocaleString()}</div>
+          </div>
+          <div style="padding:16px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border-subtle)">
+            <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Success rate</div>
+            <div style="font-size:28px;font-weight:600;margin-top:6px;color:${doneRate >= 90 ? 'var(--success)' : doneRate >= 70 ? 'var(--warn)' : 'var(--danger)'}">${doneRate}%</div>
+          </div>
+          <div style="padding:16px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border-subtle)">
+            <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Compute used</div>
+            <div style="font-size:28px;font-weight:600;margin-top:6px">${computeHrs}h</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div style="padding:12px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border-subtle)">
+            <div style="font-size:11.5px;color:var(--text-3)">Completed</div>
+            <div style="font-weight:600;color:var(--success);margin-top:2px">${done.toLocaleString()}</div>
+          </div>
+          <div style="padding:12px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border-subtle)">
+            <div style="font-size:11.5px;color:var(--text-3)">Failed</div>
+            <div style="font-weight:600;color:var(--danger);margin-top:2px">${failed.toLocaleString()}</div>
+          </div>
+          <div style="padding:12px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border-subtle)">
+            <div style="font-size:11.5px;color:var(--text-3)">Avg duration</div>
+            <div style="font-weight:600;margin-top:2px">${avgDur}s</div>
+          </div>
+        </div>
+
+        ${u.error ? `<div style="margin-top:16px;padding:12px;background:rgba(240,89,106,0.06);border-radius:8px;font-size:13px;color:var(--danger)">Could not load live usage — showing cached data.</div>` : ''}
+      </div>
+
+      ${tiers.length > 0 ? `
+      <div class="card" style="padding:28px">
+        <h3 style="margin-bottom:4px">Plans</h3>
+        <p style="color:var(--text-2);font-size:13px;margin-bottom:20px">All plans include the full Orchestra feature set. Upgrade to increase job limits.</p>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+          ${tiers.map(t => {
+            const tierId = t.tier || t.id || '';
+            const price = t.price_monthly != null ? t.price_monthly : (t.price != null ? t.price : 0);
+            return `
+            <div style="padding:18px;background:var(--bg-2);border-radius:10px;border:1px solid ${tierId === 'pro' ? 'var(--accent)' : 'var(--border-subtle)'};position:relative">
+              ${tierId === 'pro' ? `<div style="position:absolute;top:-10px;left:16px;background:var(--accent);color:white;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:4px;letter-spacing:.04em">POPULAR</div>` : ''}
+              <div style="font-weight:600;font-size:15px;margin-bottom:2px">${escapeHTML(t.name)}</div>
+              <div style="font-size:22px;font-weight:700;margin:8px 0 4px">${price === 0 ? 'Free' : `$${price}`}<span style="font-size:12px;font-weight:400;color:var(--text-3)">${price > 0 ? '/mo' : ''}</span></div>
+              <ul style="margin:12px 0 16px;padding:0 0 0 16px;font-size:13px;color:var(--text-2);display:flex;flex-direction:column;gap:4px">
+                ${(t.features || []).map(f => `<li>${escapeHTML(f)}</li>`).join('')}
+              </ul>
+              <button class="btn ${tierId === 'pro' ? 'btn--primary' : 'btn--ghost'} btn--sm" style="width:100%">${price === 0 ? 'Current plan' : 'Upgrade'}</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
     `;
   }
 
@@ -201,53 +392,6 @@
             </div>
             <div class="switch on" data-switch></div>
           </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function renderSubscription() {
-    return `
-      <div class="card" style="padding:28px;background:linear-gradient(135deg,var(--bg-1),rgba(110,110,245,0.06));border:1px solid rgba(110,110,245,0.2);position:relative;overflow:hidden">
-        <div style="position:absolute;top:-40px;right:-40px;width:220px;height:220px;border-radius:999px;background:radial-gradient(circle,var(--accent-dim),transparent 70%);pointer-events:none"></div>
-        <div style="position:relative">
-          <div class="badge badge--accent" style="margin-bottom:12px">Current plan</div>
-          <h2 style="font-size:28px;margin-bottom:4px">Orchestra Max</h2>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:20px">
-            <div style="font-size:32px;font-weight:600">$250</div>
-            <div style="color:var(--text-2)">/ month · billed annually</div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px">
-            <div>
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Agent calls</div>
-              <div style="font-size:22px;font-weight:600;margin-top:4px">1.4M <span style="font-size:12px;color:var(--text-3);font-weight:400">/ 5M</span></div>
-              <div style="height:4px;background:var(--bg-3);border-radius:999px;margin-top:8px"><div style="height:100%;width:28%;background:var(--accent);border-radius:999px"></div></div>
-            </div>
-            <div>
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Compute hours</div>
-              <div style="font-size:22px;font-weight:600;margin-top:4px">312h <span style="font-size:12px;color:var(--text-3);font-weight:400">/ 1000h</span></div>
-              <div style="height:4px;background:var(--bg-3);border-radius:999px;margin-top:8px"><div style="height:100%;width:31%;background:var(--teal);border-radius:999px"></div></div>
-            </div>
-            <div>
-              <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Storage</div>
-              <div style="font-size:22px;font-weight:600;margin-top:4px">48 GB <span style="font-size:12px;color:var(--text-3);font-weight:400">/ 500 GB</span></div>
-              <div style="height:4px;background:var(--bg-3);border-radius:999px;margin-top:8px"><div style="height:100%;width:10%;background:var(--success);border-radius:999px"></div></div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn--primary">Manage billing</button>
-            <button class="btn btn--ghost">View invoices</button>
-            <button class="btn btn--subtle">Downgrade</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="padding:24px;margin-top:16px">
-        <h4 style="margin-bottom:12px">Plan history</h4>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px"><span style="flex:1">Upgraded to Max</span><span style="color:var(--text-3);font-family:var(--font-mono);font-size:12px">Mar 04, 2025</span></div>
-          <div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-subtle);font-size:13px"><span style="flex:1">Started Pro trial</span><span style="color:var(--text-3);font-family:var(--font-mono);font-size:12px">Feb 11, 2025</span></div>
-          <div style="display:flex;align-items:center;padding:10px 0;font-size:13px"><span style="flex:1">Created account</span><span style="color:var(--text-3);font-family:var(--font-mono);font-size:12px">Feb 10, 2025</span></div>
         </div>
       </div>
     `;
@@ -326,13 +470,15 @@
     `;
   }
 
+  // ── Wiring ──────────────────────────────────────────────────────────────────
   function wire() {
     document.querySelectorAll('[data-tab]').forEach(el => {
       el.addEventListener('click', () => {
         state.tab = el.dataset.tab;
-        document.querySelector('[data-settings-body]').innerHTML = renderBody();
         document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('is-active', x === el));
-        wireBody();
+        if (state.tab === 'api' && !state.apiKeys) loadApiKeys();
+        else if (state.tab === 'subscription' && !state.usage) loadUsage();
+        repaintBody();
       });
     });
     wireBody();
@@ -342,12 +488,32 @@
     document.querySelectorAll('[data-switch]').forEach(s => {
       s.addEventListener('click', () => s.classList.toggle('on'));
     });
-    const keyToggle = document.querySelector('[data-toggle-key]');
-    if (keyToggle) {
-      keyToggle.addEventListener('click', () => {
-        state.showKey = !state.showKey;
-        document.querySelector('[data-settings-body]').innerHTML = renderBody();
-        wireBody();
+
+    // API key inputs — track value changes for button enable/disable
+    document.querySelectorAll('[data-key-input]').forEach(input => {
+      input.addEventListener('input', (e) => {
+        state.apiInputs[input.dataset.keyInput] = e.target.value;
+        const btn = document.querySelector(`[data-save-key="${input.dataset.keyInput}"]`);
+        if (btn) btn.disabled = !e.target.value.trim();
+      });
+    });
+
+    // Save key buttons
+    document.querySelectorAll('[data-save-key]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const provider = btn.dataset.saveKey;
+        const val = state.apiInputs[provider] || '';
+        saveApiKey(provider, val);
+      });
+    });
+
+    // Reload keys on error
+    const reloadBtn = document.querySelector('[data-action="reload-keys"]');
+    if (reloadBtn) {
+      reloadBtn.addEventListener('click', () => {
+        state.apiKeys = null;
+        repaintBody();
+        loadApiKeys();
       });
     }
   }
@@ -355,6 +521,9 @@
   function mount(root) {
     root.innerHTML = render();
     wire();
+    // Pre-load data for whichever tab is active
+    if (state.tab === 'api') loadApiKeys();
+    else if (state.tab === 'subscription') loadUsage();
   }
 
   window.Orchestra = window.Orchestra || {};

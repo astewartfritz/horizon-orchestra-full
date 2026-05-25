@@ -16,6 +16,8 @@
   <link rel="stylesheet" href="css/chat.css" />
   <link rel="stylesheet" href="css/animations.css" />
   <link rel="stylesheet" href="css/responsive.css" />
+
+  <script>window.ORCH_API = 'http://localhost:3000';</script>
 </head>
 <body>
   <div class="app">
@@ -24,6 +26,14 @@
     <main class="main">
       <div class="page-root" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
     </main>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- First-run onboarding overlay -->
+  <div id="onboarding-overlay" class="ob-overlay" role="dialog" aria-modal="true" aria-label="Setup wizard">
+    <div id="onboarding-panel" class="ob-panel"></div>
   </div>
 
   <!-- Load order matters: data + icons first, then components, then pages, then app -->
@@ -43,6 +53,7 @@
   <script src="js/pages/agents.js"></script>
   <script src="js/pages/tasks.js"></script>
   <script src="js/pages/settings.js"></script>
+  <script src="js/pages/onboarding.js"></script>
 
   <script src="js/app.js"></script>
 </body>
