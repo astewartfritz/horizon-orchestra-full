@@ -285,6 +285,102 @@ def register_chat_routes(
         del _active_tasks[task_id]
         return {"status": "cancelled"}
 
+    @app.get("/v1/run/stream")
+    async def v1_run_stream(task: str = "", user_id: str = "default", architecture: str = "A"):
+        """SSE bridge for the MILES GUI (gui/orchestra-gui).
+
+        Starts a chat task and streams events translated into the format the
+        MILES SPA expects: thinking / tool_call / tool_result / final / error.
+        """
+        from fastapi.responses import Response as _Response
+
+        if not task.strip():
+            return _Response("task query param required", status_code=400)
+
+        # Pick best available provider
+        _anth = os.environ.get("ANTHROPIC_API_KEY", "")
+        _oai  = os.environ.get("OPENAI_API_KEY", "")
+        if _anth:
+            _prov, _model = "anthropic", "claude-sonnet-4-6"
+        elif _oai:
+            _prov, _model = "openai", "gpt-4o"
+        else:
+            _prov, _model = "ollama", os.environ.get("ORCHESTRA_MODEL", "nemotron-mini")
+
+        req = ChatRequest(task=task.strip(), provider=_prov, model=_model, allow_web=True)
+        try:
+            info = await _do_chat(req, sessions, ctx_mgr, agent_config, workspace)
+        except Exception as exc:
+            async def _err_gen():
+                yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(_err_gen(), media_type="text/event-stream",
+                                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+        task_id = info["task_id"]
+        entry = _active_tasks[task_id]
+
+        async def miles_event_gen():
+            try:
+                # Replay already-buffered events (handles instant completion)
+                buffered = list(entry.get("events", []))
+                pending = iter(buffered)
+                done_seen = False
+
+                async def _next_ev():
+                    nonlocal done_seen
+                    # Drain buffer first
+                    try:
+                        return next(pending)
+                    except StopIteration:
+                        pass
+                    if done_seen:
+                        return None
+                    return await entry["queue"].get()
+
+                while True:
+                    ev = await _next_ev()
+                    if ev is None:
+                        yield "data: [DONE]\n\n"
+                        break
+
+                    t = ev.get("type", "")
+                    d = ev.get("data", ev)
+
+                    if t == "task_start":
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': 'Planning…'})}\n\n"
+                    elif t in ("thinking", "thought", "plan"):
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': d.get('content') or d.get('text', 'Thinking…')})}\n\n"
+                    elif t in ("tool_call", "tool_use"):
+                        tool_name = d.get("tool") or d.get("name") or d.get("tool_name", "tool")
+                        yield f"data: {json.dumps({'type': 'tool_call', 'tool': tool_name})}\n\n"
+                    elif t in ("tool_result", "tool_response"):
+                        tool_name = d.get("tool") or d.get("name") or d.get("tool_name", "tool")
+                        yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'success': d.get('success', not d.get('error'))})}\n\n"
+                    elif t == "done":
+                        done_seen = True
+                        result = d.get("result") or d.get("content") or ""
+                        yield f"data: {json.dumps({'type': 'final', 'content': str(result)})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        break
+                    elif t == "error":
+                        msg = d.get("message") or d.get("error") or "Unknown error"
+                        yield f"data: {json.dumps({'type': 'error', 'message': str(msg)})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        break
+                    # skip unknown types (token chunks, metadata, etc.)
+            except asyncio.CancelledError:
+                yield "data: [DONE]\n\n"
+            except Exception as exc:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            miles_event_gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
+
     @app.post("/api/chat/agentic")
     async def agentic_chat(req: AgenticChatRequest, request: Request = None):
         """Route a task through active agents (Claude Code, Codex, OpenClaw, or auto via Nemotron)."""

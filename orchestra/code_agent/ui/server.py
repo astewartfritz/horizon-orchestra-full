@@ -19,6 +19,7 @@ from orchestra.code_agent.config import AgentConfig
 from orchestra.code_agent.context.manager import ContextManager
 from orchestra.code_agent.session import SessionManager
 from orchestra.code_agent.ui.html import UI_HTML
+from orchestra.code_agent.ui.landing import LANDING_HTML
 from orchestra.code_agent.ui.create import CREATE_HTML
 from orchestra.code_agent.ui.finance import FINANCE_HTML, FINANCE_APP_HTML
 from orchestra.code_agent.ui.healthcare import HEALTHCARE_HTML, HEALTHCARE_APP_HTML
@@ -26,8 +27,12 @@ from orchestra.code_agent.ui.settings_page import SETTINGS_PAGE_HTML
 from orchestra.code_agent.ui.logistics import LOGISTICS_HTML, LOGISTICS_APP_HTML
 from orchestra.code_agent.ui.legal import LEGAL_HTML, LEGAL_APP_HTML
 from orchestra.code_agent.ui.build_orchestrator import BUILD_BRAND_HTML, BUILD_DASHBOARD_HTML
+from orchestra.code_agent.ui.admin import ADMIN_HTML
+from orchestra.code_agent.ui.onboarding import ONBOARDING_HTML
 from orchestra.code_agent.ui.handlers.chat import register_chat_routes
 from orchestra.code_agent.ui.handlers.sessions import register_session_routes
+from orchestra.code_agent.ui.handlers.memory_timeline import register_memory_timeline_routes
+from orchestra.code_agent.ui.handlers.stt import register_stt_routes
 from orchestra.code_agent.ui.handlers.v1_compat import register_v1_compat_routes
 from orchestra.code_agent.ui.handlers.auth_web import register_auth_web_routes
 from orchestra.code_agent.ui.handlers.context import register_context_routes
@@ -51,6 +56,12 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         allow_headers=["*"],
         allow_credentials=True,
     )
+
+    # Owner auto-login — localhost requests get a session cookie automatically
+    _owner_email_for_autologin = os.environ.get("ORCHESTRA_OWNER_EMAIL", "").strip().lower()
+    if _owner_email_for_autologin:
+        from orchestra.code_agent.ui.handlers.owner_autologin import OwnerAutoLoginMiddleware
+        app.add_middleware(OwnerAutoLoginMiddleware, owner_email=_owner_email_for_autologin)
 
     # Observability — install before any routes so everything is captured
     try:
@@ -84,6 +95,20 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         app.add_middleware(IdleTimeoutMiddleware)
     except Exception as _e:
         _log.debug("Idle timeout middleware unavailable: %s", _e)
+
+    # Concurrent session hardening — max N active sessions per user
+    try:
+        from orchestra.code_agent.ui.handlers.session_hardening import SessionHardeningMiddleware
+        app.add_middleware(SessionHardeningMiddleware)
+    except Exception as _e:
+        _log.debug("Session hardening middleware unavailable: %s", _e)
+
+    # Professional disclaimers — inject _disclaimer into AI JSON responses
+    try:
+        from orchestra.code_agent.ui.handlers.disclaimers import DisclaimerMiddleware
+        app.add_middleware(DisclaimerMiddleware)
+    except Exception as _e:
+        _log.debug("Disclaimer middleware unavailable: %s", _e)
 
     # CSRF protection — after CORS, before all route handlers
     try:
@@ -186,9 +211,25 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
     except Exception:
         pass
 
+    # Seed owner account — idempotent, runs every startup
+    try:
+        _owner_email = os.environ.get("ORCHESTRA_OWNER_EMAIL", "")
+        _owner_password = os.environ.get("ORCHESTRA_OWNER_PASSWORD", "orchestra-owner-local-2026")
+        if _owner_email:
+            from orchestra.code_agent.auth.user_store import UserStore as _US
+            from orchestra.code_agent.auth.password import PasswordHasher as _PW
+            _US.get().seed_owner(
+                email=_owner_email,
+                password_hash=_PW().hash(_owner_password),
+                name="Owner",
+            )
+            _log.info("Owner account ensured: %s (role=admin, tier=unlimited)", _owner_email)
+    except Exception as _e:
+        _log.warning("Owner seed failed: %s", _e)
+
     @app.get("/", response_class=HTMLResponse)
     async def index():
-        return UI_HTML
+        return LANDING_HTML
 
     @app.get("/app", response_class=HTMLResponse)
     async def app_page():
@@ -241,6 +282,14 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
     @app.get("/build/app", response_class=HTMLResponse)
     async def build_app():
         return BUILD_DASHBOARD_HTML
+
+    @app.get("/admin", response_class=HTMLResponse)
+    async def admin_page():
+        return ADMIN_HTML
+
+    @app.get("/onboarding", response_class=HTMLResponse)
+    async def onboarding_page():
+        return ONBOARDING_HTML
 
     @app.get("/api/admin/migrations")
     async def migration_status():
@@ -326,10 +375,12 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=404)
 
     register_session_routes(app, sessions)
+    register_memory_timeline_routes(app, sessions)
     register_context_routes(app, ctx_mgr)
     register_chat_routes(app, sessions, ctx_mgr, agent_config, workspace)
     register_skills_routes(app)
     register_prince_routes(app)
+    register_stt_routes(app)
     try:
         from orchestra.code_agent.ui.handlers.github import register_github_routes
         register_github_routes(app)
@@ -395,6 +446,30 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         register_self_improve_routes(app)
     except Exception:
         pass
+    try:
+        from orchestra.code_agent.audit.routes import register_audit_routes
+        register_audit_routes(app)
+    except Exception as _e:
+        _log.debug("Audit routes unavailable: %s", _e)
+
+    try:
+        from orchestra.code_agent.rbac.routes import register_rbac_routes
+        register_rbac_routes(app)
+    except Exception as _e:
+        _log.debug("RBAC routes unavailable: %s", _e)
+
+    try:
+        from orchestra.code_agent.consent.routes import register_consent_routes
+        register_consent_routes(app)
+    except Exception as _e:
+        _log.debug("Consent routes unavailable: %s", _e)
+
+    try:
+        from orchestra.code_agent.compliance.routes import register_compliance_routes
+        register_compliance_routes(app)
+    except Exception as _e:
+        _log.debug("Compliance routes unavailable: %s", _e)
+
     try:
         from orchestra.code_agent.build_orchestrator.routes import register_build_routes
         register_build_routes(app)
@@ -470,6 +545,26 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
         register_dashboard_routes(app)
     except Exception:
         pass
+    try:
+        from orchestra.code_agent.orgs.routes import register_org_routes
+        register_org_routes(app)
+    except Exception as _e:
+        _log.debug("Org routes unavailable: %s", _e)
+    try:
+        from orchestra.code_agent.auth.saml_routes import register_saml_routes
+        register_saml_routes(app)
+    except Exception as _e:
+        _log.debug("SAML routes unavailable: %s", _e)
+    try:
+        from orchestra.code_agent.history.routes import register_history_routes
+        register_history_routes(app)
+    except Exception as _e:
+        _log.debug("History routes unavailable: %s", _e)
+    try:
+        from orchestra.code_agent.notifications.routes import register_notification_routes
+        register_notification_routes(app)
+    except Exception as _e:
+        _log.debug("Notification routes unavailable: %s", _e)
     # Multi-channel webhooks (Python-native adapters)
     from orchestra.code_agent.channels import MessageRouter, register_channel_webhooks
     _router = MessageRouter(agent_config)
@@ -540,6 +635,13 @@ self.addEventListener('fetch', (e) => {
 
     # Web auth pages — login, signup, getting started (HTMX, cookie-based)
     register_auth_web_routes(app)
+
+    # Terminal — interactive shell WebSocket + one-shot REST
+    try:
+        from orchestra.code_agent.ui.handlers.terminal import register_terminal_routes
+        register_terminal_routes(app)
+    except Exception as _e:
+        _log.warning("Terminal routes unavailable: %s", _e)
 
     # v1 compat shim — powers gui/orchestra-gui (MILES SPA)
     register_v1_compat_routes(app)

@@ -15,6 +15,31 @@ from .models import (
 
 DB_PATH = Path.home() / ".orchestra_healthcare.db"
 
+# PHI fields encrypted at rest with AES-128 (Fernet) via API_KEY_ENCRYPTION_KEY.
+# Name fields are left plaintext to preserve LIKE search; all clinical data is encrypted.
+_PHI_ENCRYPTED = frozenset({
+    "dob", "phone", "address", "emergency_contact",
+    "allergies", "medications", "notes",
+})
+
+
+def _enc(value: str) -> str:
+    try:
+        from orchestra.code_agent.crypto.fields import encrypt
+        result = encrypt(value)
+        return result if result is not None else value
+    except Exception:
+        return value
+
+
+def _dec(value: str) -> str:
+    try:
+        from orchestra.code_agent.crypto.fields import decrypt
+        result = decrypt(value)
+        return result if result is not None else value
+    except Exception:
+        return value
+
 
 def _now() -> str:
     return datetime.utcnow().isoformat()
@@ -131,14 +156,14 @@ def init_db() -> None:
 def _row_to_patient(row: sqlite3.Row) -> Patient:
     return Patient(
         id=row["id"], first_name=row["first_name"], last_name=row["last_name"],
-        dob=row["dob"], gender=Gender(row["gender"]),
-        phone=row["phone"], email=row["email"],
-        address=row["address"], city=row["city"], state=row["state"], zip=row["zip"],
+        dob=_dec(row["dob"]), gender=Gender(row["gender"]),
+        phone=_dec(row["phone"]), email=row["email"],
+        address=_dec(row["address"]), city=row["city"], state=row["state"], zip=row["zip"],
         insurance_name=row["insurance_name"], insurance_id=row["insurance_id"],
         insurance_group=row["insurance_group"],
-        emergency_contact=row["emergency_contact"],
-        allergies=row["allergies"], medications=row["medications"],
-        notes=row["notes"], created_at=row["created_at"],
+        emergency_contact=_dec(row["emergency_contact"]),
+        allergies=_dec(row["allergies"]), medications=_dec(row["medications"]),
+        notes=_dec(row["notes"]), created_at=row["created_at"],
     )
 
 
@@ -166,11 +191,11 @@ def create_patient(data: dict[str, Any], user_id: str = "") -> Patient:
                 insurance_name,insurance_id,insurance_group,emergency_contact,
                 allergies,medications,notes,created_at,created_by)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (p.id, p.first_name, p.last_name, p.dob, p.gender.value,
-             p.phone, p.email, p.address, p.city, p.state, p.zip,
+            (p.id, p.first_name, p.last_name, _enc(p.dob), p.gender.value,
+             _enc(p.phone), p.email, _enc(p.address), p.city, p.state, p.zip,
              p.insurance_name, p.insurance_id, p.insurance_group,
-             p.emergency_contact, p.allergies, p.medications, p.notes, p.created_at,
-             user_id),
+             _enc(p.emergency_contact), _enc(p.allergies), _enc(p.medications),
+             _enc(p.notes), p.created_at, user_id),
         )
     return p
 

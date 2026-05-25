@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+from orchestra.embeddings.models import (
+    EmbeddingClient,
+    cosine_similarity as _cosine_similarity,
+    hash_embed as _hash_embed_shared,
+)
 
 
 @dataclass
@@ -104,14 +111,23 @@ class Trajectory:
 
 
 class Embedder:
+    """Generates embeddings using GPU models or the canonical API client.
+
+    Supports:
+    - ``sentence-transformers`` / ``transformers`` — local GPU models
+    - ``api`` — delegates to the canonical EmbeddingClient (OpenAI, Voyage, etc.)
+    - ``hash`` — deterministic fallback (no dependencies)
+    """
+
     def __init__(self, provider: str = "", dim: int = 128):
         self.provider = provider or os.environ.get("EMBEDDING_PROVIDER", "hash")
         self.dim = dim
         self._model = None
         self._tokenizer = None
+        self._api_client: EmbeddingClient | None = None
 
     def _use_gpu(self) -> bool:
-        if self.provider not in ("", "auto", "hash"):
+        if self.provider not in ("", "auto", "hash", "api"):
             return self.provider in ("sentence-transformers", "transformers")
         if self.provider == "hash":
             return False
@@ -122,14 +138,47 @@ class Embedder:
             return False
 
     def embed(self, text: str) -> list[float]:
+        if self.provider == "api":
+            return self._api_embed(text)
         if self._use_gpu() and self.provider != "hash":
             return self._model_embed(text)
         return self._hash_embed(text)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        if self.provider == "api":
+            return self._api_embed_batch(texts)
         if self._use_gpu() and self.provider != "hash":
             return self._model_embed_batch(texts)
         return [self._hash_embed(t) for t in texts]
+
+    def _get_api_client(self) -> EmbeddingClient | None:
+        if self._api_client is None:
+            try:
+                from orchestra.embeddings.models import CANONICAL_EMBEDDING_CLIENT
+                self._api_client = CANONICAL_EMBEDDING_CLIENT()
+            except Exception:
+                pass
+        return self._api_client
+
+    def _api_embed(self, text: str) -> list[float]:
+        client = self._get_api_client()
+        if client is None:
+            return self._hash_embed(text)
+        try:
+            return asyncio.run(client.embed(text))
+        except Exception:
+            return self._hash_embed(text)
+
+    def _api_embed_batch(self, texts: list[str]) -> list[list[float]]:
+        client = self._get_api_client()
+        if client is None:
+            return [self._hash_embed(t) for t in texts]
+        try:
+            return asyncio.run(client.batch_embed(texts))
+        except Exception:
+            return [self._hash_embed(t) for t in texts]
 
     def _lazy_init_model(self) -> None:
         if self._model is not None:
@@ -177,17 +226,7 @@ class Embedder:
         return outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
 
     def _hash_embed(self, text: str) -> list[float]:
-        import hashlib
-        vec = [0.0] * self.dim
-        for word in text.lower().split():
-            h = hashlib.md5(word.encode()).hexdigest()
-            for i in range(self.dim):
-                vec[i] += (int(h[i % 32], 16) / 15.0) * (1.0 if (int(h[(i + 1) % 32], 16) % 2 == 0) else -1.0)
-        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return [v / norm for v in vec]
+        return _hash_embed_shared(text, dim=self.dim)
 
     def cosine_similarity(self, a: list[float], b: list[float]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a)) or 1.0
-        nb = math.sqrt(sum(y * y for y in b)) or 1.0
-        return dot / (na * nb)
+        return _cosine_similarity(a, b)

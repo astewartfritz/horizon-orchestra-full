@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import math
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+from orchestra.embeddings.models import (
+    EmbeddingClient,
+    cosine_similarity as _cosine_similarity,
+    hash_embed as _hash_embed_shared,
+)
 
 
 @dataclass
@@ -52,30 +58,47 @@ class SkillV2:
 
 
 class Embedder:
+    """Embedding provider — delegates to canonical EmbeddingClient.
+
+    Supports ``"hash"`` (deterministic fallback) and ``"api"`` (remote
+    embedding via EmbeddingClient).  Falls through to hash on API failure.
+    """
+
     def __init__(self, provider: str = "hash", dim: int = 128):
         self.provider = provider
         self.dim = dim
+        self._api_client: EmbeddingClient | None = None
+
+    def _get_api_client(self) -> EmbeddingClient | None:
+        if self._api_client is None and self.provider == "api":
+            try:
+                from orchestra.embeddings.models import CANONICAL_EMBEDDING_CLIENT
+                self._api_client = CANONICAL_EMBEDDING_CLIENT()
+            except Exception:
+                pass
+        return self._api_client
 
     def embed(self, text: str) -> list[float]:
-        if self.provider == "hash":
-            return self._hash_embed(text)
-        raise ValueError(f"Unknown embedder: {self.provider}")
+        if self.provider == "api":
+            client = self._get_api_client()
+            if client is not None:
+                try:
+                    return asyncio.run(client.embed(text))
+                except Exception:
+                    pass
+        return _hash_embed_shared(text, dim=self.dim)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        return [self.embed(t) for t in texts]
-
-    def _hash_embed(self, text: str) -> list[float]:
-        import hashlib
-        vec = [0.0] * self.dim
-        for word in text.lower().split():
-            h = hashlib.md5(word.encode()).hexdigest()
-            for i in range(self.dim):
-                vec[i] += (int(h[i % 32], 16) / 15.0) * (1.0 if (int(h[(i + 1) % 32], 16) % 2 == 0) else -1.0)
-        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return [v / norm for v in vec]
+        if not texts:
+            return []
+        if self.provider == "api":
+            client = self._get_api_client()
+            if client is not None:
+                try:
+                    return asyncio.run(client.batch_embed(texts))
+                except Exception:
+                    pass
+        return [_hash_embed_shared(t, dim=self.dim) for t in texts]
 
     def cosine_similarity(self, a: list[float], b: list[float]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a)) or 1.0
-        nb = math.sqrt(sum(y * y for y in b)) or 1.0
-        return dot / (na * nb)
+        return _cosine_similarity(a, b)

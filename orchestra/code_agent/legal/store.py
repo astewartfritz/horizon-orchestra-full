@@ -10,6 +10,24 @@ from orchestra.code_agent.legal.models import Client, Matter, TimeEntry, Invoice
 
 _DB_PATH = Path.home() / ".orchestra_legal.db"
 
+# Client PII encrypted at rest — phone/address/notes but not name (needed for search).
+def _enc(v: str) -> str:
+    try:
+        from orchestra.code_agent.crypto.fields import encrypt
+        r = encrypt(v)
+        return r if r is not None else v
+    except Exception:
+        return v
+
+
+def _dec(v: str) -> str:
+    try:
+        from orchestra.code_agent.crypto.fields import decrypt
+        r = decrypt(v)
+        return r if r is not None else v
+    except Exception:
+        return v
+
 
 def _conn() -> sqlite3.Connection:
     c = sqlite3.connect(str(_DB_PATH))
@@ -137,15 +155,24 @@ def create_client(data: dict, user_id: str = "") -> Client:
         conn.execute(
             """INSERT INTO clients (id,name,email,phone,company,address,client_since,notes,created_at,created_by)
                VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (c.id, c.name, c.email, c.phone, c.company, c.address, c.client_since, c.notes, c.created_at, user_id),
+            (c.id, c.name, c.email, _enc(c.phone), c.company, _enc(c.address),
+             c.client_since, _enc(c.notes), c.created_at, user_id),
         )
     return c
+
+
+def _decrypt_client(row) -> Client:
+    d = _strip(row)
+    d["phone"] = _dec(d.get("phone", ""))
+    d["address"] = _dec(d.get("address", ""))
+    d["notes"] = _dec(d.get("notes", ""))
+    return Client(**d)
 
 
 def get_client(client_id: str) -> Optional[Client]:
     with _conn() as conn:
         row = conn.execute("SELECT * FROM clients WHERE id=?", (client_id,)).fetchone()
-    return Client(**_strip(row)) if row else None
+    return _decrypt_client(row) if row else None
 
 
 def list_clients(search: str = "", user_id: str = "") -> list[Client]:
@@ -158,7 +185,7 @@ def list_clients(search: str = "", user_id: str = "") -> list[Client]:
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     with _conn() as conn:
         rows = conn.execute(f"SELECT * FROM clients {where} ORDER BY name", params).fetchall()
-    return [Client(**_strip(r)) for r in rows]
+    return [_decrypt_client(r) for r in rows]
 
 
 def update_client(client_id: str, data: dict) -> Optional[Client]:

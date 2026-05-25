@@ -47,11 +47,36 @@ class ScanResult:
         return {"file": self.file, "line": self.line, "match": self.match[:80], "pattern": self.pattern_name, "severity": self.severity}
 
 
+@dataclass
+class ScanSummary:
+    """Result of scanning a string for secrets."""
+    secrets_found: list[ScanResult] = field(default_factory=list)
+    scan_id: str = ""
+    timestamp: str = ""
+    total_files: int = 0
+    total_secrets: int = 0
+
+
 class SecretScanner:
     def __init__(self, path: str | Path = "."):
         self.path = Path(path)
         self.compiled = [(name, re.compile(pat)) for name, pat in SECRET_PATTERNS.items()]
         self.ignores = [re.compile(p) for p in IGNORE_PATTERNS]
+
+    def scan(self, text: str) -> ScanSummary:
+        """Scan a string for secrets."""
+        results = []
+        for i, line in enumerate(text.split("\n"), 1):
+            for name, pattern in self.compiled:
+                for match in pattern.finditer(line):
+                    results.append(ScanResult(
+                        file="<content>",
+                        line=i,
+                        match=match.group(),
+                        pattern_name=name,
+                        severity="high" if "KEY" in name or "Private" in name else "medium",
+                    ))
+        return ScanSummary(secrets_found=results, total_secrets=len(results))
 
     def scan_file(self, file_path: Path) -> list[ScanResult]:
         results = []

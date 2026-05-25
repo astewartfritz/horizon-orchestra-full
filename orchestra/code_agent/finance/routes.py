@@ -32,6 +32,7 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
     formula = FormulaEngine()
     analytics = AnalyticsEngine()
     event_bus = EventBus()
+    brain = FinanceBrain()
 
     router = APIRouter(prefix=prefix)
 
@@ -64,17 +65,17 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
                 for aid, a in eng.accounts.items()}
 
     @router.get("/accounts/{account_id}/balance")
-    async def account_balance(account_id: str):
-        balance = tx_engine.get_account_balance(account_id)
-        acc = tx_engine.accounts.get(account_id)
+    async def account_balance(account_id: str, eng: TransactionEngine = Depends(_engine)):
+        acc = eng.accounts.get(account_id)
         if not acc:
             raise HTTPException(status_code=404, detail="Account not found")
+        balance = eng.get_account_balance(account_id)
         return {"account_id": account_id, "name": acc.name, "balance": round(balance, 2)}
 
     # ── Transactions ──────────────────────
 
     @router.post("/transactions")
-    async def record_transaction(body: dict[str, Any]):
+    async def record_transaction(body: dict[str, Any], eng: TransactionEngine = Depends(_engine)):
         entries = [
             LedgerEntry(
                 account_id=e["accountId"],
@@ -84,7 +85,7 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
             )
             for e in body.get("entries", [])
         ]
-        tx = tx_engine.record_transaction(
+        tx = eng.record_transaction(
             date=body["date"],
             description=body.get("description", ""),
             entries=entries,
@@ -95,8 +96,11 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
                 "balanced": tx.is_balanced, "debits": tx.debit_total, "credits": tx.credit_total}
 
     @router.get("/transactions")
-    async def query_transactions(account_id: str = "", date_from: str = "", date_to: str = ""):
-        results = tx_engine.query(
+    async def query_transactions(
+        account_id: str = "", date_from: str = "", date_to: str = "",
+        eng: TransactionEngine = Depends(_engine),
+    ):
+        results = eng.query(
             account_id=account_id or None,
             date_from=date_from,
             date_to=date_to,
@@ -113,12 +117,12 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
         }
 
     @router.get("/ledger/trial-balance")
-    async def trial_balance():
-        return tx_engine.get_trial_balance()
+    async def trial_balance(eng: TransactionEngine = Depends(_engine)):
+        return eng.get_trial_balance()
 
     @router.get("/statements")
-    async def financial_statements(period: str = ""):
-        stmt = tx_engine.get_statement(period)
+    async def financial_statements(period: str = "", eng: TransactionEngine = Depends(_engine)):
+        stmt = eng.get_statement(period)
         return {
             "period": stmt.period,
             "revenue": stmt.revenue,
@@ -134,8 +138,8 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
     # ── Reconciliations ────────────────────
 
     @router.post("/reconcile/{account_id}")
-    async def reconcile(account_id: str, body: dict[str, Any]):
-        reconciler = Reconciliator(tx_engine)
+    async def reconcile(account_id: str, body: dict[str, Any], eng: TransactionEngine = Depends(_engine)):
+        reconciler = Reconciliator(eng)
         result = reconciler.reconcile(
             account_id,
             expected_balance=body["expected_balance"],
@@ -144,8 +148,8 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
         return result
 
     @router.post("/reconcile/{account_id}/auto")
-    async def auto_reconcile(account_id: str, body: dict[str, Any]):
-        reconciler = Reconciliator(tx_engine)
+    async def auto_reconcile(account_id: str, body: dict[str, Any], eng: TransactionEngine = Depends(_engine)):
+        reconciler = Reconciliator(eng)
         tx = reconciler.auto_reconcile(
             account_id,
             expected_balance=body["expected_balance"],
@@ -450,5 +454,106 @@ def register_finance_routes(app: Any, prefix: str = "/api/finance") -> None:
     @router.get("/deals/analytics")
     async def deal_analytics():
         return pf.get_deal_analytics()
+
+    # ── SEC EDGAR ───────────────────────────────────────────────────────────────
+
+    @router.get("/edgar/{ticker}/filings")
+    async def edgar_filings(
+        ticker: str,
+        forms: str = Query("10-K,10-Q,8-K", description="Comma-separated form types"),
+    ):
+        """
+        List recent SEC filings for a public company.
+        Returns filing dates, accession numbers, and direct EDGAR viewer links.
+        """
+        from orchestra.code_agent.finance.edgar import filings_summary
+        form_list = [f.strip() for f in forms.split(",") if f.strip()]
+        try:
+            return await filings_summary(ticker, form_types=form_list or None)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"EDGAR fetch failed: {e}")
+
+    @router.get("/edgar/{ticker}/financials")
+    async def edgar_financials(ticker: str):
+        """
+        Pull 5-year XBRL financial history: revenue, net income, EPS, assets, equity, FCF.
+        Data comes directly from SEC EDGAR — no third-party data vendor required.
+        """
+        from orchestra.code_agent.finance.edgar import key_financials
+        try:
+            return await key_financials(ticker)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"EDGAR fetch failed: {e}")
+
+    @router.get("/edgar/{ticker}/cik")
+    async def edgar_cik(ticker: str):
+        """Resolve a ticker to its SEC CIK number."""
+        from orchestra.code_agent.finance.edgar import ticker_to_cik
+        cik = ticker_to_cik(ticker)
+        if not cik:
+            raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found in SEC database")
+        return {"ticker": ticker.upper(), "cik": cik, "edgar_url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}"}
+
+    # ── LBO / PE Returns ─────────────────────────────────────────────────────
+
+    @router.post("/lbo")
+    async def lbo_model(body: dict[str, Any]):
+        """
+        Full LBO model with debt schedule, operating projections, and returns.
+
+        Required: revenue, ebitda_margin, entry_multiple, debt_ebitda
+        Optional: interest_rate, amort_pct, cash_sweep, revenue_growth,
+                  margin_expansion, capex_pct_rev, tax_rate, hold_years,
+                  exit_multiple, mgmt_fee_pct, transaction_costs
+        """
+        from orchestra.code_agent.finance.lbo import LBOInputs, run_lbo
+        from dataclasses import asdict
+        required = ("revenue", "ebitda_margin", "entry_multiple", "debt_ebitda")
+        missing = [k for k in required if k not in body]
+        if missing:
+            raise HTTPException(400, f"Missing required fields: {missing}")
+        try:
+            inp = LBOInputs(**{k: v for k, v in body.items() if k in LBOInputs.__dataclass_fields__})
+            result = run_lbo(inp)
+            return {
+                "summary": {
+                    "entry_ev": result.entry_ev,
+                    "entry_ebitda": result.entry_ebitda,
+                    "entry_debt": result.entry_debt,
+                    "total_equity_invested": result.total_equity_invested,
+                    "exit_ebitda": result.exit_ebitda,
+                    "exit_ev": result.exit_ev,
+                    "exit_debt": result.exit_debt,
+                    "net_exit_equity": result.net_exit_equity,
+                    "moic": result.moic,
+                    "irr_pct": round(result.irr * 100, 1),
+                    "hold_years": result.exit_year,
+                },
+                "equity_bridge": result.equity_bridge,
+                "debt_schedule": result.debt_schedule,
+                "projections": [asdict(p) for p in result.projections],
+                "sensitivity_moic": result.sensitivity,
+            }
+        except (TypeError, ValueError) as e:
+            raise HTTPException(400, str(e))
+
+    @router.post("/returns")
+    async def simple_returns(body: dict[str, Any]):
+        """Quick MOIC / IRR for a simple investment (no LBO complexity needed)."""
+        from orchestra.code_agent.finance.lbo import simple_returns as _sr
+        required = ("invested", "proceeds", "years")
+        missing = [k for k in required if k not in body]
+        if missing:
+            raise HTTPException(400, f"Missing: {missing}")
+        return _sr(
+            invested=float(body["invested"]),
+            proceeds=float(body["proceeds"]),
+            years=float(body["years"]),
+            dividends=float(body.get("dividends", 0)),
+        )
 
     app.include_router(router)

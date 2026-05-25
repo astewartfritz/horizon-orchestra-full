@@ -9,7 +9,6 @@ from typing import Any, Callable
 
 from orchestra.code_agent.config import AgentConfig
 from orchestra.code_agent.llm.base import LLM, Message, LLMError
-from orchestra.code_agent.memory.base import Memory, NullMemory, JSONMemory, SQLiteMemory
 from orchestra.code_agent.memory.manager import MemoryManager
 from orchestra.code_agent.memory.tool import MemoryTool
 from orchestra.code_agent.tools.base import Tool, ToolResult
@@ -104,27 +103,14 @@ class Agent:
         self.tool_specs = [t.spec for t in self.tools.values()]
         self.tool_filter = tool_filter
 
-        self.memory = self._init_memory()
         self.messages: list[Message] = []
         self.reasoning = ReasoningEngine(self.llm, config.reasoning)
         self.module_saver = ModuleSaver()
-        self.context_manager = (
-            getattr(config, "context_manager", None)
-            or __import__("code_agent.context.manager", fromlist=[""]).ContextManager()
-        )
-
-    def _init_memory(self) -> Memory:
-        mt = self.config.memory_type
-        if mt == "none":
-            return NullMemory()
-        mp = self.config.memory_path or str(
-            Path.cwd() / ".code-agent-memory.json"
-        )
-        if mt == "json":
-            return JSONMemory(mp)
-        if mt == "sqlite":
-            return SQLiteMemory(Path(mp).with_suffix(".db"))
-        return NullMemory()
+        if getattr(config, "context_manager", None) is not None:
+            self.context_manager = config.context_manager
+        else:
+            from orchestra.code_agent.context.manager import ContextManager as _CM
+            self.context_manager = _CM()
 
     def set_event_queue(self, queue: asyncio.Queue) -> None:
         self._event_queue = queue
@@ -437,14 +423,6 @@ class Agent:
                 self.messages.append(tool_msg)
                 self.context_manager.add(
                     tool_msg.content[:200], tier="normal", source=tool_name
-                )
-                await self.memory.save(
-                    __import__("code_agent.memory.base", fromlist=[""]).MemoryEntry(
-                        role="tool",
-                        content=tool_msg.content or "",
-                        tool_call_id=tc["id"],
-                        name=tool_name,
-                    )
                 )
                 self.memory_manager.remember(
                     content=tool_msg.content[:1000] or "",

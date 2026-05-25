@@ -6,6 +6,7 @@ from orchestra.code_agent.memory.consolidation import MemoryConsolidation, Conso
 from orchestra.code_agent.memory.graph import MemoryGraph, GraphNode, GraphPath
 from orchestra.code_agent.memory.manager import MemoryManager
 from orchestra.code_agent.memory.tool import MemoryTool
+from orchestra.code_agent.memory.session_store import SessionStore, StoredSession
 
 __all__ = [
     "Memory", "NullMemory", "JSONMemory", "SQLiteMemory", "MemoryEntry",
@@ -16,4 +17,5 @@ __all__ = [
     "MemoryGraph", "GraphNode", "GraphPath",
     "MemoryManager",
     "MemoryTool",
+    "SessionStore", "StoredSession",
 ]

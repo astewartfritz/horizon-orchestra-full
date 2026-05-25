@@ -116,6 +116,9 @@ class JWTManager:
         role: str = "user",
         tier: str = "free",
         expires_in: int = 3600,
+        prof_role: str = "",
+        org_id: str = "",
+        org_role: str = "",
     ) -> str:
         payload: dict[str, Any] = {
             "sub": user_id,
@@ -126,6 +129,12 @@ class JWTManager:
             "exp": int(time.time() + expires_in),
             "jti": str(uuid.uuid4()),
         }
+        if prof_role:
+            payload["prof_role"] = prof_role
+        if org_id:
+            payload["org_id"] = org_id
+        if org_role:
+            payload["org_role"] = org_role
         return self._sign(payload)
 
     def create_refresh_token(

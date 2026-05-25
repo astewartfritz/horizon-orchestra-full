@@ -9,6 +9,7 @@ from orchestra.code_agent.tools.diff_ops import DiffTool, PatchTool, ApplyEditTo
 from orchestra.code_agent.tools.weather import WeatherTool
 from orchestra.code_agent.tools.news import NewsTool
 from orchestra.code_agent.tools.realtime import CryptoTool, CurrencyTool, WikipediaTool, GitHubSearchTool, NASATool
+from orchestra.code_agent.tools.science import SemanticScholarTool, PubMedTool
 from orchestra.code_agent.vector.indexer import IndexerTool
 from orchestra.code_agent.analysis.tool import AnalyzeTool
 from orchestra.code_agent.output.testgen import TestGenTool
@@ -23,6 +24,7 @@ __all__ = [
     "WebFetchTool", "WebSearchTool",
     "WeatherTool", "NewsTool",
     "CryptoTool", "CurrencyTool", "WikipediaTool", "GitHubSearchTool", "NASATool",
+    "SemanticScholarTool", "PubMedTool",
     "GitTool",
     "TaskTool",
     "DiffTool", "PatchTool", "ApplyEditTool",
@@ -46,6 +48,8 @@ CORE_TOOLS: list[type[Tool]] = [
     WeatherTool,
     NewsTool,
     CryptoTool,
+    SemanticScholarTool,
+    PubMedTool,
     CurrencyTool,
     WikipediaTool,
     GitHubSearchTool,

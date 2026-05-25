@@ -1,6 +1,7 @@
 __version__ = "0.4.0"
 
 from orchestra.code_agent.agent import Agent, AgentConfig
+from orchestra.code_agent.harness import AgentHarness, HarnessConfig, Observability
 from orchestra.code_agent.tools.base import Tool, ToolResult, ToolSpec
 from orchestra.code_agent.reviewer import CodeReviewer
 from orchestra.code_agent.session import Session, SessionManager
@@ -157,7 +158,7 @@ from orchestra.code_agent.workflow_v2 import (
 from orchestra.code_agent import serving
 
 __all__ = [
-    "Agent", "AgentConfig", "LLMConfig",
+    "Agent", "AgentConfig", "AgentHarness", "HarnessConfig", "Observability", "LLMConfig",
     "Tool", "ToolResult", "ToolSpec",
     "CodeReviewer",
     "Session", "SessionManager",

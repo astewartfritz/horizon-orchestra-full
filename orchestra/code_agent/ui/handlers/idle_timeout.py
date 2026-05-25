@@ -39,24 +39,37 @@ class IdleTimeoutMiddleware:
             await self.app(scope, receive, send)
             return
 
-        response_started = False
         content_type = ""
         body_chunks: list[bytes] = []
-        injected = False
+
+        start_message: dict = {}
 
         async def patched_send(message: dict) -> None:
-            nonlocal response_started, content_type, injected
+            nonlocal content_type
 
             if message["type"] == "http.response.start":
-                response_started = True
-                headers = dict(message.get("headers", []))
-                content_type = headers.get(b"content-type", b"").decode("utf-8", errors="replace")
-                await send(message)
+                # Extract content-type from headers list — ASGI headers are (bytes, bytes) tuples
+                for name, value in message.get("headers", []):
+                    if name.lower() == b"content-type":
+                        content_type = value.decode("utf-8", errors="replace")
+                        break
+                if "text/html" in content_type:
+                    # Buffer start message — we must remove Content-Length so uvicorn
+                    # doesn't close the connection when we inject extra bytes into the body
+                    new_headers = [
+                        (n, v) for n, v in message.get("headers", [])
+                        if n.lower() != b"content-length"
+                    ]
+                    start_message.update({**message, "headers": new_headers})
+                else:
+                    await send(message)
 
             elif message["type"] == "http.response.body":
-                if "text/html" in content_type and not injected:
-                    body = message.get("body", b"")
-                    more = message.get("more_body", False)
+                body = message.get("body", b"")
+                more = message.get("more_body", False)
+
+                if "text/html" in content_type:
+                    # Buffer all chunks; inject into the final assembled body
                     body_chunks.append(body)
                     if not more:
                         full = b"".join(body_chunks)
@@ -64,11 +77,16 @@ class IdleTimeoutMiddleware:
                         if _BODY_CLOSE in full:
                             full = full.replace(_BODY_CLOSE, script_bytes, 1)
                         else:
-                            full = full + script_bytes
-                        injected = True
+                            full += script_bytes
+                        # Now send the buffered start message (without Content-Length) then body
+                        await send(start_message)
                         await send({"type": "http.response.body", "body": full, "more_body": False})
+                    # While more chunks are coming, buffer silently — send when done
                 else:
                     await send(message)
+
+            else:
+                await send(message)
 
         await self.app(scope, receive, patched_send)
 

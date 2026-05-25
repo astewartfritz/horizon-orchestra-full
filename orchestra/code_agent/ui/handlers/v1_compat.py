@@ -81,8 +81,31 @@ def _safe_user(user: dict) -> dict:
     return {k: v for k, v in user.items() if k not in ("password_hash",)}
 
 
-def _encode_local_token(user_id: str, role: str = "user", tier: str = "free") -> str:
-    return _jwt().create_access_token(user_id, role=role, tier=tier, expires_in=604800)
+def _encode_local_token(
+    user_id: str,
+    role: str = "user",
+    tier: str = "free",
+    prof_role: str = "",
+    org_id: str = "",
+    org_role: str = "",
+) -> str:
+    return _jwt().create_access_token(
+        user_id, role=role, tier=tier, expires_in=604800,
+        prof_role=prof_role, org_id=org_id, org_role=org_role,
+    )
+
+
+def _primary_org_claims(user_id: str) -> tuple[str, str]:
+    """Return (org_id, org_role) for the user's first active org, or ('', '')."""
+    try:
+        from orchestra.code_agent.orgs.store import list_orgs_for_user, get_member
+        orgs = list_orgs_for_user(user_id)
+        if orgs:
+            m = get_member(orgs[0].id, user_id)
+            return orgs[0].id, (m.role if m else "member")
+    except Exception:
+        pass
+    return "", ""
 
 
 def _decode_local_token(token: str) -> str | None:
@@ -193,9 +216,32 @@ def register_v1_compat_routes(app: FastAPI) -> None:
         err = _validate_credentials(email, password)
         if err:
             return JSONResponse(_wrap(error=err), status_code=422)
+        _owner_email = os.environ.get("ORCHESTRA_OWNER_EMAIL", "").strip().lower()
+        # Owner email always gets approved immediately; everyone else starts pending
+        is_owner = (email == _owner_email) if _owner_email else False
         try:
-            user = _store.create_user(email=email, password_hash=_pw.hash(password), name=name)
-            access_token = _encode_local_token(user["id"], role=user.get("role","user"), tier=user.get("tier","free"))
+            user = _store.create_user(
+                email=email, password_hash=_pw.hash(password), name=name,
+                approved=is_owner, is_owner=is_owner,
+                role="admin" if is_owner else "user",
+                tier="unlimited" if is_owner else "free",
+            )
+            # Auto-create personal org for new users
+            try:
+                from orchestra.code_agent.orgs.store import create_org
+                create_org(name=name or email.split("@")[0], owner_user_id=user["id"])
+            except Exception:
+                pass
+            if not is_owner and not user.get("approved"):
+                return JSONResponse(_wrap({
+                    "pending": True,
+                    "message": "Your account is pending approval. The owner will review your request.",
+                }), status_code=202)
+            org_id, org_role = _primary_org_claims(user["id"])
+            access_token = _encode_local_token(
+                user["id"], role=user.get("role", "user"), tier=user.get("tier", "free"),
+                prof_role=user.get("prof_role", ""), org_id=org_id, org_role=org_role,
+            )
             resp = JSONResponse(_wrap({"access_token": access_token, "token_type": "bearer", "user": _safe_user(user)}))
             _set_session_cookie(resp, access_token)
             return resp
@@ -216,7 +262,17 @@ def register_v1_compat_routes(app: FastAPI) -> None:
             _record_failed(email)
             return JSONResponse(_wrap(error="Invalid email or password"), status_code=401)
         _clear_failed(email)
-        access_token = _encode_local_token(user["id"], role=user.get("role","user"), tier=user.get("tier","free"))
+        # Block unapproved accounts (owner is always approved)
+        if not user.get("approved") and not user.get("is_owner"):
+            return JSONResponse(_wrap({
+                "pending": True,
+                "message": "Your account is pending approval by the owner. Check back soon.",
+            }), status_code=403)
+        org_id, org_role = _primary_org_claims(user["id"])
+        access_token = _encode_local_token(
+            user["id"], role=user.get("role", "user"), tier=user.get("tier", "free"),
+            prof_role=user.get("prof_role", ""), org_id=org_id, org_role=org_role,
+        )
         resp = JSONResponse(_wrap({"access_token": access_token, "token_type": "bearer", "user": _safe_user(user)}))
         _set_session_cookie(resp, access_token)
         return resp
@@ -402,3 +458,194 @@ def register_v1_compat_routes(app: FastAPI) -> None:
             "done": entry.get("done", False),
             "result": entry.get("result"),
         }))
+
+    # ── API key status (MILES GUI: GET /v1/config/keys) ───────────────────────
+    @app.get("/v1/config/keys")
+    async def v1_get_key_status(request: Request):
+        """Return which provider keys are configured — never the values."""
+        import os
+        # First check environment (fastest path — keys loaded at startup)
+        status = {
+            "anthropic":  bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "openai":     bool(os.environ.get("OPENAI_API_KEY")),
+            "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
+        }
+        # Also check server-side key store (keys saved via the GUI)
+        try:
+            from orchestra.code_agent.api_keys.store import ApiKeyStore
+            from orchestra.code_agent.api_keys.routes import _get_user_id
+            user_id = _get_user_id(request)
+            store = ApiKeyStore.get()
+            stored = {k["provider"] for k in store.list_for_user(user_id)}
+            for p in ("anthropic", "openai", "openrouter"):
+                if p in stored:
+                    status[p] = True
+        except Exception:
+            pass
+        return JSONResponse(status)
+
+    # ── Save API keys (MILES GUI: POST /v1/config/keys) ──────────────────────
+    @app.post("/v1/config/keys")
+    async def v1_set_keys(request: Request):
+        """Store provider keys server-side and inject into the environment."""
+        import os, pathlib
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(_wrap(error="Invalid JSON"), status_code=400)
+
+        _ENV_MAP = {
+            "anthropic_api_key":  ("anthropic",  "ANTHROPIC_API_KEY"),
+            "openai_api_key":     ("openai",     "OPENAI_API_KEY"),
+            "openrouter_api_key": ("openrouter", "OPENROUTER_API_KEY"),
+        }
+        saved: list[str] = []
+
+        # Try server-side ApiKeyStore first
+        try:
+            from orchestra.code_agent.api_keys.store import ApiKeyStore
+            from orchestra.code_agent.api_keys.routes import _get_user_id
+            user_id = _get_user_id(request)
+            store = ApiKeyStore.get()
+            for field, (provider, env_var) in _ENV_MAP.items():
+                val = (body.get(field) or "").strip()
+                if val:
+                    store.upsert(user_id=user_id, provider=provider, key=val)
+                    os.environ[env_var] = val   # live reload for this process
+                    saved.append(provider)
+        except Exception:
+            # Fallback: write to .env file (arch_e.py style)
+            _env_path = pathlib.Path(__file__).resolve().parents[4] / ".env"
+            lines: list[str] = []
+            if _env_path.exists():
+                lines = _env_path.read_text().splitlines()
+            for field, (provider, env_var) in _ENV_MAP.items():
+                val = (body.get(field) or "").strip()
+                if val:
+                    lines = [l for l in lines if not l.startswith(env_var + "=")]
+                    lines.append(f"{env_var}={val}")
+                    os.environ[env_var] = val
+                    saved.append(provider)
+            _env_path.write_text("\n".join(lines) + "\n")
+
+        return JSONResponse({"saved": True, "providers": saved})
+
+    # ── Notifications (MILES GUI: GET /v1/notifications) ─────────────────────
+    @app.get("/v1/notifications")
+    async def v1_notifications(user_id: str = "default", since: float = 0.0):
+        """Return recently completed chat tasks as notification items."""
+        from orchestra.code_agent.ui.handlers.chat import _active_tasks
+        notifs = []
+        for tid, entry in list(_active_tasks.items()):
+            if not entry.get("done"):
+                continue
+            completed_at = entry.get("completed_at") or time.time()
+            if completed_at <= since:
+                continue
+            result = str(entry.get("result") or "")
+            notifs.append({
+                "id": tid,
+                "status": "failed" if result.lower().startswith("error") else "complete",
+                "title": "Task complete" if not result.lower().startswith("error") else "Task failed",
+                "body": result[:120],
+                "completed_at": completed_at,
+            })
+        # Most recent first
+        notifs.sort(key=lambda n: n["completed_at"], reverse=True)
+        return JSONResponse(notifs[:20])
+
+    # ── Billing tiers (MILES GUI: GET /v1/billing/tiers) ─────────────────────
+    @app.get("/v1/billing/tiers")
+    async def v1_billing_tiers():
+        """Return available subscription tiers."""
+        # Try real billing store first
+        try:
+            from orchestra.code_agent.billing.routes import _TIERS  # type: ignore
+            return JSONResponse(list(_TIERS.values()))
+        except Exception:
+            pass
+        return JSONResponse([
+            {"tier": "maker",      "name": "Maker",      "price_monthly": 0,
+             "features": ["Local models (Ollama)", "1,000 tool calls/mo", "10 sessions/day"]},
+            {"tier": "builder",    "name": "Builder",    "price_monthly": 29,
+             "features": ["All Maker features", "Cloud models", "10,000 tool calls/mo", "$10 credit/mo"]},
+            {"tier": "pro",        "name": "Pro",        "price_monthly": 99,
+             "features": ["All Builder features", "Claude Opus 4.7", "Unlimited sessions", "$50 credit/mo"]},
+            {"tier": "enterprise", "name": "Enterprise", "price_monthly": 499,
+             "features": ["All Pro features", "Custom security policies", "Audit logs", "$200 credit/mo"]},
+        ])
+
+    # ── Usage dashboard (MILES GUI: GET /v1/usage/dashboard) ─────────────────
+    @app.get("/v1/usage/dashboard")
+    async def v1_usage_dashboard(user_id: str = "default"):
+        """Return aggregated usage stats from active + completed tasks."""
+        from orchestra.code_agent.ui.handlers.chat import _active_tasks
+        tasks = list(_active_tasks.values())
+        total = len(tasks)
+        by_status: dict[str, int] = {"complete": 0, "failed": 0, "running": 0, "pending": 0}
+        durations: list[float] = []
+        for entry in tasks:
+            if entry.get("done"):
+                result = str(entry.get("result") or "")
+                if result.lower().startswith("error"):
+                    by_status["failed"] += 1
+                else:
+                    by_status["complete"] += 1
+                dur = entry.get("duration_seconds")
+                if dur:
+                    durations.append(float(dur))
+            else:
+                by_status["running"] += 1
+        avg_dur = (sum(durations) / len(durations)) if durations else None
+        return JSONResponse({
+            "jobs_total": total,
+            "jobs_by_status": by_status,
+            "avg_duration_seconds": round(avg_dur, 1) if avg_dur else None,
+            "total_compute_seconds": round(sum(durations), 1) if durations else 0,
+        })
+
+    # ── Owner admin: user approval ────────────────────────────────────────────
+
+    def _require_owner(request: Request) -> str | None:
+        """Return owner email if request is from the owner, else None."""
+        _owner_email = os.environ.get("ORCHESTRA_OWNER_EMAIL", "").strip().lower()
+        if not _owner_email:
+            return None
+        token = (request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+                 or request.cookies.get("session", ""))
+        if not token:
+            return None
+        user_id = _decode_local_token(token)
+        if not user_id:
+            return None
+        user = _store.get_user_by_id(user_id)
+        if user and user.get("email", "").lower() == _owner_email:
+            return _owner_email
+        return None
+
+    @app.get("/api/admin/users")
+    async def admin_list_users(request: Request):
+        """Owner-only: list all users with approval status."""
+        if not _require_owner(request):
+            return JSONResponse({"detail": "Forbidden"}, status_code=403)
+        users = _store.get_all_users()
+        return JSONResponse({"users": users})
+
+    @app.post("/api/admin/users/{user_id}/approve")
+    async def admin_approve_user(user_id: str, request: Request):
+        """Owner-only: approve a pending user."""
+        if not _require_owner(request):
+            return JSONResponse({"detail": "Forbidden"}, status_code=403)
+        ok = _store.approve_user(user_id)
+        if not ok:
+            return JSONResponse({"detail": "User not found"}, status_code=404)
+        user = _store.get_user_by_id(user_id)
+        return JSONResponse({"ok": True, "user": _safe_user(user)})
+
+    @app.delete("/api/admin/users/{user_id}")
+    async def admin_reject_user(user_id: str, request: Request):
+        """Owner-only: reject/remove a user."""
+        if not _require_owner(request):
+            return JSONResponse({"detail": "Forbidden"}, status_code=403)
+        ok = _store.reject_user(user_id)
+        return JSONResponse({"ok": ok})

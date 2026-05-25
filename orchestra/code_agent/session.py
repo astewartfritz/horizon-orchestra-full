@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -10,9 +11,16 @@ from typing import Any
 from orchestra.code_agent import Agent, AgentConfig
 from orchestra.code_agent.llm.base import Message
 
+_log = logging.getLogger(__name__)
+
 
 @dataclass
 class Session:
+    """A chat session with conversation history and agent state.
+
+    Backed by SessionStore (SQLite, same DB as MemoryStore).
+    JSON-file persistence is deprecated — sessions auto-migrate on first access.
+    """
     id: str = ""
     task: str = ""
     created_at: str = ""
@@ -57,51 +65,72 @@ class Session:
 
 
 class SessionManager:
-    def __init__(self, path: str | Path = ".code-agent-sessions"):
-        self.path = Path(path)
-        self.path.mkdir(parents=True, exist_ok=True)
+    """Manages chat sessions backed by SessionStore (SQLite).
 
-    def _path(self, sid: str) -> Path:
-        return self.path / f"{sid}.json"
+    Delegates to ``orchestra.code_agent.memory.session_store.SessionStore``
+    which stores sessions in the same ``.agent-memory.db`` as MemoryStore,
+    replacing the old JSON-file-per-session approach.
+
+    Old JSON sessions are auto-migrated on first access (idempotent).
+    The public API is unchanged — all 20+ call sites work without modification.
+    """
+
+    def __init__(self, path: str | Path = ".code-agent-sessions"):
+        self._json_path = Path(path)
+        self._store: Any = None  # Lazy-init SessionStore to avoid circular imports
+        self._migrated = False
+
+    def _get_store(self):
+        if self._store is None:
+            from orchestra.code_agent.memory.session_store import SessionStore
+            self._store = SessionStore()
+            if not self._migrated:
+                migrated = self._store.migrate_from_json(self._json_path)
+                if migrated:
+                    _log.info("Migrated %d sessions to unified SQLite store", migrated)
+                self._migrated = True
+        return self._store
 
     def save(self, session: Session) -> None:
-        self._path(session.id).write_text(
-            json.dumps(session.to_dict(), indent=2), "utf-8"
+        from orchestra.code_agent.memory.session_store import StoredSession
+        store = self._get_store()
+        stored = StoredSession(
+            id=session.id,
+            task=session.task,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            messages=session.messages,
+            config=session.config,
+            state=session.state,
+            result=session.result,
+            finished=session.finished,
         )
+        store.save(stored)
 
     def load(self, sid: str) -> Session | None:
-        p = self._path(sid)
-        if not p.exists():
+        store = self._get_store()
+        stored = store.load(sid)
+        if not stored:
             return None
-        return Session.from_dict(json.loads(p.read_text("utf-8")))
+        return Session(
+            id=stored.id,
+            task=stored.task,
+            created_at=stored.created_at,
+            updated_at=stored.updated_at,
+            messages=stored.messages,
+            config=stored.config,
+            state=stored.state,
+            result=stored.result,
+            finished=stored.finished,
+        )
 
     def delete(self, sid: str) -> None:
-        p = self._path(sid)
-        if p.exists():
-            p.unlink()
+        store = self._get_store()
+        store.delete(sid)
 
     def list_sessions(self) -> list[dict[str, Any]]:
-        sessions = []
-        for p in sorted(self.path.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
-            try:
-                data = json.loads(p.read_text("utf-8"))
-                msgs = data.get("messages", [])
-                last = ""
-                for m in reversed(msgs):
-                    if m.get("role") == "assistant" and m.get("content", "").strip():
-                        last = m["content"].strip()[:120]
-                        break
-                sessions.append({
-                    "id": data.get("id", p.stem),
-                    "task": data.get("task", "")[:80],
-                    "created_at": data.get("created_at", ""),
-                    "finished": data.get("finished", False),
-                    "last_response": last,
-                    "message_count": len([m for m in msgs if m.get("role") in ("user", "assistant")]),
-                })
-            except Exception:
-                continue
-        return sessions
+        store = self._get_store()
+        return store.list_sessions()
 
     async def resume_agent(self, sid: str) -> Agent | None:
         session = self.load(sid)

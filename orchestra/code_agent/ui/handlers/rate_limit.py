@@ -12,6 +12,7 @@ Limits (configurable via settings):
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections import defaultdict
 from typing import Any
@@ -151,6 +152,34 @@ class RateLimitMiddleware:
         if any(path.startswith(p) for p in _SKIP_PREFIXES):
             await self.app(scope, receive, send)
             return
+
+        # Owner bypass — no rate limiting ever
+        _owner_email = os.environ.get("ORCHESTRA_OWNER_EMAIL", "").strip().lower()
+        if _owner_email:
+            _headers = dict(scope.get("headers", []))
+            _auth = _headers.get(b"authorization", b"").decode("utf-8", errors="ignore")
+            _token = _auth.removeprefix("Bearer ").strip()
+            if not _token:
+                import http.cookies as _hc
+                _raw_cookie = _headers.get(b"cookie", b"").decode("utf-8", errors="ignore")
+                _jar = _hc.SimpleCookie()
+                try:
+                    _jar.load(_raw_cookie)
+                    _token = _jar.get("session", _hc.Morsel()).value or ""
+                except Exception:
+                    pass
+            if _token:
+                try:
+                    from orchestra.code_agent.ui.handlers.v1_compat import _decode_local_token
+                    from orchestra.code_agent.auth.user_store import UserStore as _US
+                    _uid = _decode_local_token(_token)
+                    if _uid:
+                        _u = _US.get().get_user_by_id(_uid)
+                        if _u and _u.get("email", "").lower() == _owner_email:
+                            await self.app(scope, receive, send)
+                            return
+                except Exception:
+                    pass
 
         ip = _client_ip(scope)
         limiter, tier = _get_limiter(path)

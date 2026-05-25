@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import json
-import math
-import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -11,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from orchestra.code_agent.memory.base import MemoryEntry
+from orchestra.embeddings.models import (
+    CANONICAL_EMBEDDING_CLIENT,
+    EmbeddingClient,
+    _md5_hash_embed,
+    cosine_similarity,
+)
 
 
 @dataclass
@@ -68,70 +72,57 @@ class EntityEdge:
 
 
 class EmbeddingEngine:
-    def __init__(self, provider: str = "hash", api_key: str | None = None, model: str = "text-embedding-ada-002"):
+    """Generates text embeddings — delegates to canonical EmbeddingClient.
+
+    Falls back to a deterministic hash when no API key is available.
+    """
+
+    def __init__(self, provider: str = "hash", api_key: str | None = None, model: str = "text-embedding-3-small"):
         self.provider = provider
         self.api_key = api_key
         self.model = model
         self._dim = 128
-        self._client = None
+        self._client: EmbeddingClient | None = None
 
-    def _get_openai_client(self):
-        if self._client is None and self.provider == "openai":
+    def _get_client(self) -> EmbeddingClient | None:
+        if self._client is None:
             try:
-                import openai
-                self._client = openai.OpenAI(api_key=self.api_key)
-            except ImportError:
-                self.provider = "hash"
+                if self.provider == "openai" or self.provider == "hash":
+                    self._client = CANONICAL_EMBEDDING_CLIENT()
+                    # Check if any API key is set
+                    available = self._client.list_models()
+                    has_key = any(m["available"] for m in available)
+                    if not has_key and self.provider == "hash":
+                        self._client = None
+                else:
+                    self._client = CANONICAL_EMBEDDING_CLIENT()
+            except Exception:
+                self._client = None
         return self._client
 
     def embed(self, text: str) -> list[float]:
-        if self.provider == "openai":
-            client = self._get_openai_client()
-            if client:
-                try:
-                    resp = client.embeddings.create(input=text, model=self.model)
-                    return resp.data[0].embedding
-                except Exception:
-                    pass
-        return self._hash_embed(text, self._dim)
+        client = self._get_client()
+        if client is not None:
+            try:
+                return asyncio.run(client.embed(text, model=self.model))
+            except Exception:
+                pass
+        return _md5_hash_embed(text, self._dim)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        if self.provider == "openai":
-            client = self._get_openai_client()
-            if client and len(texts) > 0:
-                try:
-                    resp = client.embeddings.create(input=texts, model=self.model)
-                    results = [None] * len(texts)
-                    for d in resp.data:
-                        results[d.index] = d.embedding
-                    return results
-                except Exception:
-                    pass
-        return [self._hash_embed(t, self._dim) for t in texts]
-
-    @staticmethod
-    def _hash_embed(text: str, dim: int = 128) -> list[float]:
-        tokens = re.findall(r"\w+", text.lower())
-        vec = [0.0] * dim
-        for i, token in enumerate(tokens):
-            h = hashlib.md5(token.encode()).hexdigest()
-            idx = int(h[:8], 16) % dim
-            vec[idx] += 1.0 / (1.0 + i * 0.01)
-        mag = math.sqrt(sum(v * v for v in vec))
-        if mag > 0:
-            vec = [v / mag for v in vec]
-        return vec
+        if not texts:
+            return []
+        client = self._get_client()
+        if client is not None:
+            try:
+                return asyncio.run(client.batch_embed(texts, model=self.model))
+            except Exception:
+                pass
+        return [_md5_hash_embed(t, self._dim) for t in texts]
 
     @staticmethod
     def cosine_sim(a: list[float], b: list[float]) -> float:
-        if not a or not b:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a))
-        nb = math.sqrt(sum(y * y for y in b))
-        if na == 0 or nb == 0:
-            return 0.0
-        return dot / (na * nb)
+        return cosine_similarity(a, b)
 
 
 class MemoryStore:

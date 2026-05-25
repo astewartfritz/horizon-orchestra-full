@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import sys
 
 from orchestra.code_agent.tools.base import Tool, ToolResult, ToolSpec
@@ -19,10 +18,16 @@ class BashTool(Tool):
         },
     )
 
-    POWERSHELL_PREFIX = (
+    _PS_PREFIX = (
         "$ErrorActionPreference='Stop'; "
         "$PSDefaultParameterValues['*:Encoding'] = 'utf8'; "
     )
+
+    def _build_cmd(self, command: str) -> str:
+        if sys.platform == "win32":
+            escaped = command.replace('"', '\\"')
+            return f'powershell -NoProfile -Command "{self._PS_PREFIX}{escaped}"'
+        return command
 
     async def __call__(
         self,
@@ -32,7 +37,7 @@ class BashTool(Tool):
         workdir: str | None = None,
     ) -> ToolResult:
         try:
-            shell_cmd = f'powershell -NoProfile -Command "{self.POWERSHELL_PREFIX}{command}"'
+            shell_cmd = self._build_cmd(command)
 
             proc = await asyncio.create_subprocess_shell(
                 shell_cmd,

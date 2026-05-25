@@ -425,6 +425,27 @@ function renderMarkets(c) {
       <div class="card-title">📰 Market News</div>
       <div id="mkt-news"><div style="color:#8b949e;font-size:.85rem">Loading…</div></div>
     </div>
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title">📌 Trader Resources</div>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.6rem;background:#0d1117;border-radius:6px;border:1px solid #21262d">
+          <div style="font-size:1.5rem;flex-shrink:0">📈</div>
+          <div>
+            <div style="font-weight:700;color:#fff;font-size:.9rem">Adam Mancini</div>
+            <div style="font-size:.8rem;color:#8b949e;margin:.2rem 0">Technical analyst — S&amp;P 500 futures, key support/resistance levels, and swing trade setups. Dad's pick.</div>
+            <a href="https://twitter.com/AdamMancini4" target="_blank" rel="noopener" style="font-size:.78rem;color:#34d399;text-decoration:none">@AdamMancini4 on X →</a>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.6rem;background:#0d1117;border-radius:6px;border:1px solid #21262d">
+          <div style="font-size:1.5rem;flex-shrink:0">🧠</div>
+          <div>
+            <div style="font-weight:700;color:#fff;font-size:.9rem">Tom Hougaard</div>
+            <div style="font-size:.8rem;color:#8b949e;margin:.2rem 0">Professional trader (FTSE, DAX, S&amp;P) known for live trading transparency and trading psychology. Author of <em style="color:#c9d1d9">Best Loser Wins</em> — mindset over strategy.</div>
+            <a href="https://twitter.com/TomHougaard" target="_blank" rel="noopener" style="font-size:.78rem;color:#34d399;text-decoration:none">@TomHougaard on X →</a>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
   loadIndices(); loadNews();
 }

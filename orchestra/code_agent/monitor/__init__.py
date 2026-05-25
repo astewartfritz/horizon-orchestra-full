@@ -6,7 +6,14 @@ from orchestra.code_agent.monitor.sentry import (
     safe_capture,
 )
 from orchestra.code_agent.monitor.dashboard import MonitorDashboard
-from orchestra.code_agent.monitor.collector import MetricsCollector
+from orchestra.code_agent.monitor.collector import MetricsCollector, MetricPoint
+from orchestra.code_agent.monitor.alerts import (
+    AlertCondition,
+    AlertEvent,
+    AlertManager,
+    AlertRule,
+    AlertState,
+)
 
 __all__ = [
     "SentryConfig",
@@ -16,4 +23,10 @@ __all__ = [
     "safe_capture",
     "MonitorDashboard",
     "MetricsCollector",
+    "MetricPoint",
+    "AlertCondition",
+    "AlertEvent",
+    "AlertManager",
+    "AlertRule",
+    "AlertState",
 ]

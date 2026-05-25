@@ -73,8 +73,8 @@ class FilesystemLayer:
             scan = self._secret_scanner.scan(content)
             if scan.secrets_found:
                 return LayerDecision(False, "filesystem",
-                                     f"Secret detected in content: {scan.secrets_found[0].type}",
-                                     flags=[f.type for f in scan.secrets_found])
+                                     f"Secret detected in content: {scan.secrets_found[0].pattern_name}",
+                                     flags=[f.pattern_name for f in scan.secrets_found])
 
         return LayerDecision(True, "filesystem")
 
