@@ -351,11 +351,13 @@ class ModelRouter:
         Prefers PerplexityAdapter for Perplexity models and OpenAIAdapter
         for everything else.  Import is deferred to avoid circular imports.
         """
-        from .providers import OpenAIAdapter, PerplexityAdapter
+        from .providers import LocalAdapter, OpenAIAdapter, PerplexityAdapter
         cfg = self.models.get(model_name)
         if cfg and cfg.provider == "perplexity":
             api_key = os.environ.get(cfg.api_key_env, "") if cfg.api_key_env else ""
             return PerplexityAdapter(api_key=api_key, model=cfg.model_id)
+        if cfg and cfg.provider == "local":
+            return LocalAdapter(model=cfg.model_id, base_url=cfg.base_url)
         client, model_id = self.get_client(model_name)
         return OpenAIAdapter(client=client, model=model_id)
 

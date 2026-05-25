@@ -5,8 +5,9 @@ from .base import CompletionResponse, Message, ProviderAdapter
 from .openai_adapter import OpenAIAdapter
 from .anthropic_adapter import AnthropicAdapter
 from .perplexity_adapter import PerplexityAdapter
+from .local_adapter import LocalAdapter
 
 __all__ = [
     "ProviderAdapter", "Message", "CompletionResponse",
-    "OpenAIAdapter", "AnthropicAdapter", "PerplexityAdapter",
+    "OpenAIAdapter", "AnthropicAdapter", "PerplexityAdapter", "LocalAdapter",
 ]
