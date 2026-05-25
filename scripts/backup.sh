@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# backup.sh — Workspace backup for Horizon Orchestra.
-# Backs up SQLite memory DBs, user workspace files, and configuration.
-# Optionally uploads to S3.
+# backup.sh — Backup automation for Horizon Orchestra.
+# Backs up SQLite databases, PostgreSQL (via pg_dump), workspace files, and config.
+# Uploads to S3 and manages local/remote retention.
 set -euo pipefail
 
 # --- Configuration ---
@@ -10,10 +10,14 @@ ORCHESTRA_HOME="${ORCHESTRA_HOME:-/opt/orchestra}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/orchestra}"
 S3_BUCKET="${S3_BUCKET:-}"
 S3_PREFIX="${S3_PREFIX:-backups/orchestra}"
+DATABASE_URL="${DATABASE_URL:-}"
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 BACKUP_NAME="orchestra-backup-${TIMESTAMP}"
 BACKUP_PATH="${BACKUP_DIR}/${BACKUP_NAME}"
 RETAIN_LOCAL_DAYS="${BACKUP_RETAIN_DAYS:-30}"
+RETAIN_REMOTE_DAYS="${BACKUP_RETAIN_REMOTE_DAYS:-90}"
+S3_STORAGE_CLASS="${S3_STORAGE_CLASS:-STANDARD_IA}"
+BACKUP_VERIFY="${BACKUP_VERIFY:-true}"
 
 log_info()  { echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] [INFO]  $*"; }
 log_error() { echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] [ERROR] $*" >&2; }
@@ -23,129 +27,230 @@ log_warn()  { echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] [WARN]  $*"; }
 mkdir -p "${BACKUP_DIR}"
 mkdir -p "${BACKUP_PATH}"
 
+# --- Detect if DATABASE_URL is PostgreSQL ---
+is_postgres() {
+  [[ -n "${DATABASE_URL}" && "${DATABASE_URL}" == postgresql://* ]]
+}
+
 # --- Backup SQLite databases ---
 backup_sqlite() {
-    log_info "Backing up SQLite databases"
-    local db_dir="${BACKUP_PATH}/databases"
-    mkdir -p "${db_dir}"
+  log_info "Backing up SQLite databases"
+  local db_dir="${BACKUP_PATH}/databases"
+  mkdir -p "${db_dir}"
 
-    local count=0
-    while IFS= read -r -d '' dbfile; do
-        local dbname
-        dbname=$(basename "${dbfile}")
-        # Use SQLite online backup if sqlite3 is available.
-        if command -v sqlite3 &>/dev/null; then
-            sqlite3 "${dbfile}" ".backup '${db_dir}/${dbname}'" 2>/dev/null || {
-                # Fallback: direct copy.
-                cp "${dbfile}" "${db_dir}/${dbname}"
-            }
-        else
-            cp "${dbfile}" "${db_dir}/${dbname}"
-        fi
-        count=$((count + 1))
-    done < <(find "${ORCHESTRA_HOME}" "${WORKSPACE_ROOT}" -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" 2>/dev/null -print0 || true)
+  local count=0
+  while IFS= read -r -d '' dbfile; do
+    local dbname
+    dbname=$(basename "${dbfile}")
+    if command -v sqlite3 &>/dev/null; then
+      sqlite3 "${dbfile}" ".backup '${db_dir}/${dbname}'" 2>/dev/null || {
+        cp "${dbfile}" "${db_dir}/${dbname}"
+      }
+    else
+      cp "${dbfile}" "${db_dir}/${dbname}"
+    fi
+    count=$((count + 1))
+  done < <(find "${ORCHESTRA_HOME}" "${WORKSPACE_ROOT}" -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" 2>/dev/null -print0 || true)
 
-    log_info "  Backed up ${count} SQLite database(s)"
+  log_info "  Backed up ${count} SQLite database(s)"
+}
+
+# --- Backup PostgreSQL via pg_dump ---
+backup_postgres() {
+  if ! is_postgres; then
+    log_info "PostgreSQL backup skipped (DATABASE_URL not set or not PostgreSQL)"
+    return 0
+  fi
+
+  if ! command -v pg_dump &>/dev/null; then
+    log_warn "pg_dump not found, skipping PostgreSQL backup"
+    return 0
+  fi
+
+  log_info "Backing up PostgreSQL database"
+  local pg_dir="${BACKUP_PATH}/postgres"
+  mkdir -p "${pg_dir}"
+  local dump_file="${pg_dir}/postgres.sql"
+
+  pg_dump "${DATABASE_URL}" \
+    --no-owner \
+    --no-acl \
+    --verbose \
+    --file="${dump_file}" 2>"${pg_dir}/pg_dump.log" || {
+    log_error "pg_dump failed"
+    return 1
+  }
+
+  gzip -f "${dump_file}"
+  local size
+  size=$(du -h "${dump_file}.gz" | cut -f1)
+  log_info "  PostgreSQL dump: ${dump_file}.gz (${size})"
 }
 
 # --- Backup user workspace files ---
 backup_workspace() {
-    log_info "Backing up user workspace files"
-    local ws_dir="${BACKUP_PATH}/workspace"
-    mkdir -p "${ws_dir}"
+  log_info "Backing up user workspace files"
+  local ws_dir="${BACKUP_PATH}/workspace"
+  mkdir -p "${ws_dir}"
 
-    if [[ -d "${WORKSPACE_ROOT}" ]]; then
-        # Exclude large/temporary directories.
-        rsync -a --quiet \
-            --exclude='node_modules/' \
-            --exclude='__pycache__/' \
-            --exclude='.git/' \
-            --exclude='*.pyc' \
-            --exclude='.venv/' \
-            --exclude='target/' \
-            "${WORKSPACE_ROOT}/" "${ws_dir}/" 2>/dev/null || {
-                # Fallback if rsync not available.
-                cp -r "${WORKSPACE_ROOT}" "${ws_dir}/" 2>/dev/null || true
-            }
-        local size
-        size=$(du -sh "${ws_dir}" 2>/dev/null | cut -f1)
-        log_info "  Workspace backup size: ${size}"
-    else
-        log_warn "  Workspace directory not found: ${WORKSPACE_ROOT}"
-    fi
+  if [[ -d "${WORKSPACE_ROOT}" ]]; then
+    rsync -a --quiet \
+      --exclude='node_modules/' \
+      --exclude='__pycache__/' \
+      --exclude='.git/' \
+      --exclude='*.pyc' \
+      --exclude='.venv/' \
+      --exclude='target/' \
+      "${WORKSPACE_ROOT}/" "${ws_dir}/" 2>/dev/null || {
+        cp -r "${WORKSPACE_ROOT}" "${ws_dir}/" 2>/dev/null || true
+      }
+    local size
+    size=$(du -sh "${ws_dir}" 2>/dev/null | cut -f1)
+    log_info "  Workspace backup size: ${size}"
+  else
+    log_warn "  Workspace directory not found: ${WORKSPACE_ROOT}"
+  fi
 }
 
 # --- Backup configuration ---
 backup_config() {
-    log_info "Backing up configuration"
-    local cfg_dir="${BACKUP_PATH}/config"
-    mkdir -p "${cfg_dir}"
+  log_info "Backing up configuration"
+  local cfg_dir="${BACKUP_PATH}/config"
+  mkdir -p "${cfg_dir}"
 
-    # Orchestra configuration.
-    if [[ -d "${ORCHESTRA_HOME}/config" ]]; then
-        cp -r "${ORCHESTRA_HOME}/config" "${cfg_dir}/orchestra/" 2>/dev/null || true
+  if [[ -d "${ORCHESTRA_HOME}/config" ]]; then
+    cp -r "${ORCHESTRA_HOME}/config" "${cfg_dir}/orchestra/" 2>/dev/null || true
+  fi
+
+  for envfile in .env .env.local .env.production; do
+    if [[ -f "${WORKSPACE_ROOT}/${envfile}" ]]; then
+      cp "${WORKSPACE_ROOT}/${envfile}" "${cfg_dir}/${envfile}"
     fi
+  done
 
-    # Environment files.
-    for envfile in .env .env.local .env.production; do
-        if [[ -f "${WORKSPACE_ROOT}/${envfile}" ]]; then
-            cp "${WORKSPACE_ROOT}/${envfile}" "${cfg_dir}/${envfile}"
-        fi
-    done
+  log_info "  Configuration backed up"
+}
 
-    log_info "  Configuration backed up"
+# --- Verify backup integrity ---
+verify_backup() {
+  local archive="$1"
+  log_info "Verifying backup archive integrity..."
+
+  if ! gzip -t "${archive}" 2>/dev/null; then
+    log_error "Backup archive is corrupt (gzip check failed)"
+    return 1
+  fi
+
+  if ! tar -tzf "${archive}" &>/dev/null; then
+    log_error "Backup archive is corrupt (tar check failed)"
+    return 1
+  fi
+
+  log_info "  Integrity check passed"
 }
 
 # --- Create compressed archive ---
 create_archive() {
-    log_info "Creating compressed archive"
-    local archive="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
-    tar -czf "${archive}" -C "${BACKUP_DIR}" "${BACKUP_NAME}"
-    rm -rf "${BACKUP_PATH}"
+  log_info "Creating compressed archive"
+  local archive="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
+  tar -czf "${archive}" -C "${BACKUP_DIR}" "${BACKUP_NAME}"
+  rm -rf "${BACKUP_PATH}"
 
-    local size
-    size=$(du -sh "${archive}" 2>/dev/null | cut -f1)
-    log_info "  Archive created: ${archive} (${size})"
-    echo "${archive}"
+  local size
+  size=$(du -sh "${archive}" 2>/dev/null | cut -f1)
+  log_info "  Archive created: ${archive} (${size})"
+
+  if [[ "${BACKUP_VERIFY}" == "true" ]]; then
+    verify_backup "${archive}" || return 1
+  fi
+
+  echo "${archive}"
 }
 
-# --- Upload to S3 (optional) ---
+# --- Upload to S3 ---
 upload_to_s3() {
-    local archive="$1"
+  local archive="$1"
 
-    if [[ -z "${S3_BUCKET}" ]]; then
-        log_info "S3 upload skipped (S3_BUCKET not set)"
-        return 0
-    fi
+  if [[ -z "${S3_BUCKET}" ]]; then
+    log_info "S3 upload skipped (S3_BUCKET not set)"
+    return 0
+  fi
 
-    if ! command -v aws &>/dev/null; then
-        log_warn "AWS CLI not found, skipping S3 upload"
-        return 0
-    fi
+  if ! command -v aws &>/dev/null; then
+    log_warn "AWS CLI not found, skipping S3 upload"
+    return 0
+  fi
 
-    local s3_key="${S3_PREFIX}/$(basename "${archive}")"
-    log_info "Uploading to s3://${S3_BUCKET}/${s3_key}"
+  local s3_key="${S3_PREFIX}/${BACKUP_NAME}.tar.gz"
+  log_info "Uploading to s3://${S3_BUCKET}/${s3_key}"
 
-    if aws s3 cp "${archive}" "s3://${S3_BUCKET}/${s3_key}" --quiet; then
-        log_info "  S3 upload complete"
-    else
-        log_error "  S3 upload failed"
-        return 1
-    fi
+  if aws s3 cp "${archive}" "s3://${S3_BUCKET}/${s3_key}" \
+    --storage-class "${S3_STORAGE_CLASS}" --quiet; then
+    log_info "  S3 upload complete"
+
+    # Upload verification checksum
+    local md5_file="${archive}.md5"
+    md5sum "${archive}" | cut -d' ' -f1 > "${md5_file}"
+    aws s3 cp "${md5_file}" "s3://${S3_BUCKET}/${s3_key}.md5" --quiet || true
+    log_info "  Checksum uploaded"
+  else
+    log_error "  S3 upload failed"
+    return 1
+  fi
 }
 
 # --- Clean old local backups ---
 clean_old_backups() {
-    log_info "Cleaning backups older than ${RETAIN_LOCAL_DAYS} days"
-    local count=0
-    while IFS= read -r -d '' oldbackup; do
-        rm -f "${oldbackup}"
-        count=$((count + 1))
-    done < <(find "${BACKUP_DIR}" -maxdepth 1 -name "orchestra-backup-*.tar.gz" -type f -mtime "+${RETAIN_LOCAL_DAYS}" -print0)
+  log_info "Cleaning local backups older than ${RETAIN_LOCAL_DAYS} days"
+  local count=0
+  while IFS= read -r -d '' oldbackup; do
+    rm -f "${oldbackup}"
+    rm -f "${oldbackup}.md5" 2>/dev/null || true
+    count=$((count + 1))
+  done < <(find "${BACKUP_DIR}" -maxdepth 1 -name "orchestra-backup-*.tar.gz" -type f -mtime "+${RETAIN_LOCAL_DAYS}" -print0)
 
-    if [[ ${count} -gt 0 ]]; then
-        log_info "  Removed ${count} old backup(s)"
+  if [[ ${count} -gt 0 ]]; then
+    log_info "  Removed ${count} old local backup(s)"
+  fi
+}
+
+# --- Clean old remote backups ---
+clean_remote_backups() {
+  if [[ -z "${S3_BUCKET}" ]]; then
+    return 0
+  fi
+
+  if ! command -v aws &>/dev/null; then
+    return 0
+  fi
+
+  log_info "Cleaning remote backups older than ${RETAIN_REMOTE_DAYS} days"
+  local cutoff
+  cutoff=$(date -u -d "${RETAIN_REMOTE_DAYS} days ago" +"%Y%m%d-%H%M%S" 2>/dev/null || \
+           date -u -v "-${RETAIN_REMOTE_DAYS}d" +"%Y%m%d-%H%M%S" 2>/dev/null || true)
+
+  if [[ -z "${cutoff}" ]]; then
+    log_warn "  Cannot compute cutoff date, skipping remote cleanup"
+    return 0
+  fi
+
+  local count=0
+  while IFS= read -r line; do
+    local key
+    key=$(echo "${line}" | awk '{print $4}')
+    local key_date
+    key_date=$(basename "${key}" .tar.gz | sed 's/orchestra-backup-//')
+
+    if [[ "${key_date}" < "${cutoff}" ]]; then
+      aws s3 rm "s3://${S3_BUCKET}/${key}" --quiet
+      count=$((count + 1))
     fi
+  done < <(aws s3api list-objects-v2 --bucket "${S3_BUCKET}" --prefix "${S3_PREFIX}/" \
+    --query "Contents[?Key.ends_with(@,'.tar.gz')].[Key,LastModified]" --output text 2>/dev/null || true)
+
+  if [[ ${count} -gt 0 ]]; then
+    log_info "  Removed ${count} old remote backup(s)"
+  fi
 }
 
 # --- Main ---
@@ -153,10 +258,12 @@ log_info "Orchestra backup starting"
 log_info "Backup name: ${BACKUP_NAME}"
 
 backup_sqlite
+backup_postgres
 backup_workspace
 backup_config
 ARCHIVE=$(create_archive)
 upload_to_s3 "${ARCHIVE}"
 clean_old_backups
+clean_remote_backups
 
 log_info "Backup completed successfully: ${ARCHIVE}"
