@@ -30,6 +30,18 @@ class _MockAuditSink:
 class TestRateLimitMiddleware(unittest.IsolatedAsyncioTestCase):
     """Core middleware behavior with mock Redis."""
 
+    def setUp(self):
+        import os
+        self._orig = os.environ.get("RATE_LIMIT_ENABLED")
+        os.environ["RATE_LIMIT_ENABLED"] = "true"
+
+    def tearDown(self):
+        import os
+        if self._orig is None:
+            os.environ.pop("RATE_LIMIT_ENABLED", None)
+        else:
+            os.environ["RATE_LIMIT_ENABLED"] = self._orig
+
     async def test_allow_decision_with_mock_redis(self):
         redis = AsyncMock()
         redis.evalsha = AsyncMock(return_value=[1, 9, 0])
@@ -134,6 +146,18 @@ class TestRateLimitMiddleware(unittest.IsolatedAsyncioTestCase):
 class TestMiddlewareProtocol(unittest.IsolatedAsyncioTestCase):
     """Test the before/after/on_error protocol hooks."""
 
+    def setUp(self):
+        import os
+        self._orig = os.environ.get("RATE_LIMIT_ENABLED")
+        os.environ["RATE_LIMIT_ENABLED"] = "true"
+
+    def tearDown(self):
+        import os
+        if self._orig is None:
+            os.environ.pop("RATE_LIMIT_ENABLED", None)
+        else:
+            os.environ["RATE_LIMIT_ENABLED"] = self._orig
+
     async def test_before_allows(self):
         redis = AsyncMock()
         redis.evalsha = AsyncMock(return_value=[1, 9, 0])
@@ -169,6 +193,18 @@ class TestMiddlewareProtocol(unittest.IsolatedAsyncioTestCase):
 
 class TestFairnessMultiTenant(unittest.IsolatedAsyncioTestCase):
     """Concurrent requests from multiple tenants — no cross-tenant leakage."""
+
+    def setUp(self):
+        import os
+        self._orig = os.environ.get("RATE_LIMIT_ENABLED")
+        os.environ["RATE_LIMIT_ENABLED"] = "true"
+
+    def tearDown(self):
+        import os
+        if self._orig is None:
+            os.environ.pop("RATE_LIMIT_ENABLED", None)
+        else:
+            os.environ["RATE_LIMIT_ENABLED"] = self._orig
 
     async def test_no_cross_tenant_leakage(self):
         mw = RateLimitMiddleware(redis=None, default_capacity=10, default_refill_per_second=0.001)
