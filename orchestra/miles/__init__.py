@@ -1,14 +1,18 @@
-"""
-miles — Proactive AI assistant layer for Horizon Orchestra.
+"""M.I.L.E.S — Machine Intelligence Learning and Execution System.
 
-Exports all public symbols from the MILES sub-modules so callers
-can do simple imports, e.g.::
+Proactive AI assistant layer for Horizon Orchestra.  Import the top-level
+``MILES`` class for normal use, or import individual subsystem classes
+for custom wiring::
 
+    from orchestra.miles import MILES, MILESConfig
     from orchestra.miles import ProactiveEngine, VoiceAssistant
 """
 from __future__ import annotations
 
 __all__ = [
+    # Top-level façade
+    "MILES",
+    "MILESConfig",
     # intelligence
     "Suggestion",
     "Pattern",
@@ -34,8 +38,37 @@ __all__ = [
     "DailySummary",
     "SmartReminder",
     "RoutineManager",
+    # enterprise
+    "SSOConfig",
+    "SSOEngine",
+    "RBACEngine",
+    "Role",
+    "TenantStore",
+    "TenantContext",
+    "current_tenant",
+    "scim_router",
+    "sso_middleware",
+    "tenant_middleware",
+    "tenant_admin_router",
+    "rbac_dependency",
+    # channels
+    "ChannelHub",
+    "ChannelMessage",
+    "ChannelResponse",
+    "ChannelAdapter",
+    "ConsentRegistry",
+    "ChannelGuardrails",
+    "GuardrailConfig",
+    "IngestionPipeline",
+    "SlackChannelAdapter",
+    "TelegramChannelAdapter",
+    "GmailChannelAdapter",
+    "WhatsAppChannelAdapter",
+    "InstagramChannelAdapter",
+    "IMessageChannelAdapter",
 ]
 
+from orchestra.miles.core import MILES, MILESConfig
 from orchestra.miles.intelligence import (
     ActionPredictor,
     Pattern,
@@ -64,4 +97,34 @@ from orchestra.miles.routines import (
     RoutineManager,
     SmartReminder,
     Summary,
+)
+from orchestra.miles.enterprise import (
+    SSOConfig,
+    SSOEngine,
+    RBACEngine,
+    Role,
+    TenantStore,
+    TenantContext,
+    current_tenant,
+    scim_router,
+    sso_middleware,
+    tenant_middleware,
+    tenant_admin_router,
+    rbac_dependency,
+)
+from orchestra.miles.channels import (
+    ChannelAdapter,
+    ChannelGuardrails,
+    ChannelHub,
+    ChannelMessage,
+    ChannelResponse,
+    ConsentRegistry,
+    GmailChannelAdapter,
+    GuardrailConfig,
+    IMessageChannelAdapter,
+    IngestionPipeline,
+    InstagramChannelAdapter,
+    SlackChannelAdapter,
+    TelegramChannelAdapter,
+    WhatsAppChannelAdapter,
 )

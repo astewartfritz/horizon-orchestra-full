@@ -20,6 +20,8 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from orchestra.miles._utils import extract_content, router_chat, safe_json_loads
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -111,13 +113,13 @@ these fields:
 """
         suggestions: list[Suggestion] = []
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=800,
             )
-            raw = _extract_content(resp)
-            data = _safe_json_loads(raw, default=[])
+            raw = extract_content(resp)
+            data = safe_json_loads(raw, default=[])
             if isinstance(data, list):
                 for item in data[:3]:
                     if not isinstance(item, dict):
@@ -371,13 +373,13 @@ List the 3-5 most likely next actions this user will take. Return ONLY a JSON
 array of action strings, e.g. ["open email", "review PR", "check calendar"].
 """
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=200,
             )
-            raw = _extract_content(resp)
-            data = _safe_json_loads(raw, default=[])
+            raw = extract_content(resp)
+            data = safe_json_loads(raw, default=[])
             if isinstance(data, list):
                 return [str(a) for a in data[:5]]
         except Exception as exc:  # noqa: BLE001
@@ -390,29 +392,3 @@ array of action strings, e.g. ["open email", "review PR", "check calendar"].
 # ---------------------------------------------------------------------------
 
 
-def _extract_content(resp: Any) -> str:
-    if isinstance(resp, str):
-        return resp
-    if isinstance(resp, dict):
-        try:
-            return resp["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError):
-            return resp.get("content", "") or ""
-    try:
-        return resp.choices[0].message.content or ""
-    except (AttributeError, IndexError, TypeError):
-                import logging as _log; _log.getLogger('miles.intelligence').debug('Suppressed exception', exc_info=True)
-    try:
-        return resp.content or ""
-    except AttributeError:
-        return str(resp)
-
-
-def _safe_json_loads(text: str, default: Any = None) -> Any:
-    """Parse JSON, stripping markdown fences if present."""
-    import re
-    cleaned = re.sub(r"```(?:json)?\s*", "", text).replace("```", "").strip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        return default

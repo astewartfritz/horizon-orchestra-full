@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+from orchestra.miles._utils import extract_content, router_chat, safe_json_loads
+
 logger = logging.getLogger(__name__)
 
 
@@ -270,15 +272,13 @@ Return ONLY a JSON array of suggestion strings.
 Example: ["Review the agenda for your 2 PM meeting", "Follow up on John's email"]
 """
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=400,
             )
-            raw = _extract_content(resp)
-            import json as _json, re as _re
-            cleaned = _re.sub(r"```(?:json)?\s*", "", raw).replace("```", "").strip()
-            data = _json.loads(cleaned)
+            raw = extract_content(resp)
+            data = safe_json_loads(raw, default=[])
             if isinstance(data, list):
                 return [str(s) for s in data[:5]]
         except Exception as exc:  # noqa: BLE001
@@ -362,8 +362,8 @@ Example: ["Review the agenda for your 2 PM meeting", "Follow up on John's email"
             if results:
                 return str(results[0].get("snippet", ""))[:200]
         except ImportError:
-                        import logging as _log; _log.getLogger('miles.awareness').debug('Suppressed exception', exc_info=True)
-        except Exception as exc:  # noqa: BLE001
+            pass  # web_search tool not installed
+        except Exception as exc:
             logger.debug("Weather fetch via search failed: %s", exc)
         return ""
 
@@ -405,24 +405,6 @@ def _state_to_text(state: AwarenessState) -> str:
     for t in state.open_tasks[:3]:
         lines.append(f"  - Task: {t.get('name') or t.get('title', 'Untitled')}")
     return "\n".join(lines)
-
-
-def _extract_content(resp: Any) -> str:
-    if isinstance(resp, str):
-        return resp
-    if isinstance(resp, dict):
-        try:
-            return resp["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError):
-            return resp.get("content", "") or ""
-    try:
-        return resp.choices[0].message.content or ""
-    except (AttributeError, IndexError, TypeError):
-                import logging as _log; _log.getLogger('miles.awareness').debug('Suppressed exception', exc_info=True)
-    try:
-        return resp.content or ""
-    except AttributeError:
-        return str(resp)
 
 
 def _parse_dt(value: str, tz: Any) -> datetime:

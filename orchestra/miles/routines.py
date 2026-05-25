@@ -26,6 +26,7 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from orchestra.miles.awareness import AmbientAwareness, AwarenessState, UrgentItem
+from orchestra.miles._utils import extract_content, router_chat, safe_json_loads
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +144,12 @@ Write in second person ("You have…"). Keep it under 200 words. Be energetic an
         summary = ""
         suggestions: list[str] = []
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=400,
             )
-            summary = _extract_content(resp).strip()
+            summary = extract_content(resp).strip()
             # Extract suggestions from LLM response via a second targeted call
             suggestions = await self._generate_suggestions(state)
         except Exception as exc:  # noqa: BLE001
@@ -178,15 +179,13 @@ List exactly 2-3 specific focus areas or tasks they should prioritise today.
 Return ONLY a JSON array of strings.
 """
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=200,
             )
-            raw = _extract_content(resp)
-            import json as _json, re as _re
-            cleaned = _re.sub(r"```(?:json)?\s*", "", raw).replace("```", "").strip()
-            data = _json.loads(cleaned)
+            raw = extract_content(resp)
+            data = safe_json_loads(raw, default=[])
             if isinstance(data, list):
                 return [str(s) for s in data[:3]]
         except Exception as exc:  # noqa: BLE001
@@ -244,15 +243,13 @@ Return a JSON object with these exact keys:
   summary_text        - str, 2-3 sentence human-readable summary
 """
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=600,
             )
-            raw = _extract_content(resp)
-            import json as _json, re as _re
-            cleaned = _re.sub(r"```(?:json)?\s*", "", raw).replace("```", "").strip()
-            data = _json.loads(cleaned)
+            raw = extract_content(resp)
+            data = safe_json_loads(raw, default={})
             return Summary(
                 accomplishments=[str(a) for a in data.get("accomplishments", [])],
                 unfinished=[str(u) for u in data.get("unfinished", [])],
@@ -517,17 +514,13 @@ object with: type="pattern", title, body, urgency ("low"|"medium"|"high"), actio
 If none apply, return null.
 """
         try:
-            resp = await self._router.chat(
+            resp = await router_chat(
+                self._router,
                 messages=[{"role": "user", "content": prompt}],
-                model="kimi-k2.5",
                 max_tokens=200,
             )
-            raw = _extract_content(resp).strip()
-            import json as _json, re as _re
-            cleaned = _re.sub(r"```(?:json)?\s*", "", raw).replace("```", "").strip()
-            if cleaned.lower() == "null" or not cleaned:
-                return reminders
-            data = _json.loads(cleaned)
+            raw = extract_content(resp).strip()
+            data = safe_json_loads(raw)
             if isinstance(data, dict) and data.get("title"):
                 reminders.append(
                     Reminder(
@@ -781,24 +774,6 @@ def _parse_hhmm(value: str) -> tuple[int, int]:
     except (IndexError, ValueError):
         logger.warning("Invalid time string '%s', defaulting to 08:00", value)
         return 8, 0
-
-
-def _extract_content(resp: Any) -> str:
-    if isinstance(resp, str):
-        return resp
-    if isinstance(resp, dict):
-        try:
-            return resp["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError):
-            return resp.get("content", "") or ""
-    try:
-        return resp.choices[0].message.content or ""
-    except (AttributeError, IndexError, TypeError):
-                import logging as _log; _log.getLogger('miles.routines').debug('Suppressed exception', exc_info=True)
-    try:
-        return resp.content or ""
-    except AttributeError:
-        return str(resp)
 
 
 def _format_briefing_context(state: AwarenessState) -> str:
