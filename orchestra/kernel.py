@@ -45,6 +45,7 @@ from .agent_loop import (
 from .evaluation import Evaluator, EvalResult, QualityGate
 from .telemetry import Tracer, Span, CostTracker
 from .safety import SafetyLayer
+from .queue.checkpoint import CheckpointStore, WorkflowCheckpoint
 
 __all__ = ["AgentKernel", "KernelConfig", "KernelState", "PlanStep"]
 
@@ -101,6 +102,8 @@ class KernelConfig:
     lookahead_depth: int = 2           # FLARE: how many steps to look ahead
     temperature: float = 0.6
     max_tokens: int = 16384
+    workflow_id: str = ""              # non-empty enables checkpoint save/resume
+    checkpoint_dir: str = ""          # override CheckpointStore directory
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +199,13 @@ class AgentKernel:
         self.safety = SafetyLayer() if self.config.enable_safety else None
         self.gate = QualityGate(min_score=self.config.quality_threshold)
 
+        # Durable checkpointing (opt-in via workflow_id)
+        if self.config.workflow_id:
+            kw = {"directory": self.config.checkpoint_dir} if self.config.checkpoint_dir else {}
+            self._checkpoints: CheckpointStore | None = CheckpointStore(**kw)
+        else:
+            self._checkpoints = None
+
     async def run(self, goal: str, context: str = "") -> str:
         """Execute the full kernel loop: plan → act → observe → reflect."""
         self.state = KernelState(goal=goal, status="planning")
@@ -206,12 +216,26 @@ class AgentKernel:
             if check.blocked:
                 return f"[BLOCKED] {check.block_reason}"
 
+        # ── Resume from checkpoint if one exists ──────────────────────
+        _results: list[str] = []
+        if self._checkpoints:
+            saved = self._checkpoints.load(self.config.workflow_id)
+            if saved and saved.status == "running":
+                log.info("[KERNEL] Resuming workflow %s at step %d",
+                         self.config.workflow_id, saved.current_step)
+                self.state.plan = [PlanStep(**s) for s in saved.plan]
+                self.state.current_step = saved.current_step
+                self.state.total_tool_calls = saved.total_tool_calls
+                self.state.replans = saved.replans
+                _results = saved.results
+
         root_span = self.tracer.span("kernel.run") if self.tracer else None
 
         try:
-            # ── PHASE 1: PLAN ─────────────────────────────────────────
+            # ── PHASE 1: PLAN (skip if resumed) ───────────────────────
             plan_span = self.tracer.span("kernel.plan", root_span) if self.tracer else None
-            await self._plan(goal, context)
+            if not self.state.plan:
+                await self._plan(goal, context)
             if plan_span:
                 plan_span.set("steps", len(self.state.plan))
                 plan_span.end()
@@ -220,10 +244,10 @@ class AgentKernel:
 
             # ── PHASE 2: EXECUTE STEPS ────────────────────────────────
             self.state.status = "acting"
-            results: list[str] = []
+            results: list[str] = _results  # may be pre-populated on resume
 
             for step in self.state.plan:
-                if step.status == "skipped":
+                if step.status in ("skipped", "done"):
                     continue
 
                 step.status = "active"
@@ -256,6 +280,9 @@ class AgentKernel:
                     step_span.set("status", step.status)
                     step_span.set("iterations", step.iterations)
                     step_span.end()
+
+                # Checkpoint after every step so we can resume on restart
+                self._save_checkpoint(goal, results)
 
                 # ── PHASE 3: REFLECT ──────────────────────────────────
                 if (self.state.total_tool_calls % self.config.reflection_interval == 0
@@ -296,6 +323,31 @@ class AgentKernel:
                 root_span.set("total_tool_calls", self.state.total_tool_calls)
                 root_span.set("replans", self.state.replans)
                 root_span.end()
+            # Remove checkpoint when the workflow finishes cleanly
+            if self._checkpoints and self.config.workflow_id:
+                self._checkpoints.delete(self.config.workflow_id)
+
+    # -- checkpoint helper --------------------------------------------------
+
+    def _save_checkpoint(self, goal: str, results: list[str]) -> None:
+        if not self._checkpoints or not self.config.workflow_id:
+            return
+        cp = WorkflowCheckpoint(
+            workflow_id=self.config.workflow_id,
+            goal=goal,
+            plan=[
+                {"id": s.id, "description": s.description, "status": s.status,
+                 "result": s.result, "tools_used": s.tools_used,
+                 "iterations": s.iterations, "retries": s.retries}
+                for s in self.state.plan
+            ],
+            current_step=self.state.current_step,
+            total_tool_calls=self.state.total_tool_calls,
+            replans=self.state.replans,
+            results=results[-20:],  # keep last 20 to bound file size
+            status="running",
+        )
+        self._checkpoints.save(cp)
 
     # -- planning -----------------------------------------------------------
 
