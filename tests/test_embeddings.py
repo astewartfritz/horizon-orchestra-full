@@ -220,6 +220,7 @@ class TestTextChunker(unittest.TestCase):
             default_chunk_size=10,
             default_overlap=0,
             default_strategy=ChunkStrategy.FIXED,
+            min_chunk_size=0,
         )
         chunks = chunker.chunk(self.text)
         self.assertGreater(len(chunks), 1)
@@ -230,6 +231,7 @@ class TestTextChunker(unittest.TestCase):
             default_chunk_size=2,
             default_overlap=0,
             default_strategy=ChunkStrategy.SENTENCE,
+            min_chunk_size=0,
         )
         chunks = chunker.chunk(sent_text)
         self.assertGreaterEqual(len(chunks), 2)
@@ -242,6 +244,7 @@ class TestTextChunker(unittest.TestCase):
             default_chunk_size=2,
             default_overlap=0,
             default_strategy=ChunkStrategy.PARAGRAPH,
+            min_chunk_size=0,
         )
         chunks = chunker.chunk(para_text)
         self.assertGreaterEqual(len(chunks), 2)
