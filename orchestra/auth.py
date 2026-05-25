@@ -18,14 +18,19 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 import base64
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["AuthManager", "User", "Org", "AuthConfig", "RateLimiter"]
+__all__ = ["AuthManager", "User", "Org", "AuthConfig", "RateLimiter", "OWNER_EMAIL", "is_owner"]
 
 log = logging.getLogger("orchestra.auth")
+
+# The sole account permitted to see AI-generated code output.
+# Set OWNER_EMAIL in the environment to override.
+OWNER_EMAIL: str = os.environ.get("OWNER_EMAIL", "ashton@horizon-orchestra.com")
 
 
 @dataclass
@@ -40,6 +45,11 @@ class User:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+def is_owner(user: "User") -> bool:
+    """Return True if this user is the platform owner."""
+    return user.email.lower() == OWNER_EMAIL.lower()
+
+
 @dataclass
 class Org:
     id: str
@@ -52,7 +62,18 @@ class Org:
 
 @dataclass
 class AuthConfig:
-    secret: str = "horizon-orchestra-dev-secret"
+    secret: str = os.environ.get("JWT_SECRET", "")
+
+    def __post_init__(self) -> None:
+        if not self.secret:
+            import logging as _lg
+            _lg.getLogger("orchestra.auth").warning(
+                "JWT_SECRET not set! Using an auto-generated volatile secret. "
+                "Auth tokens will be invalidated on every restart. "
+                "Set JWT_SECRET in your .env or environment."
+            )
+            self.secret = hashlib.sha256(os.urandom(64)).hexdigest()
+
     token_expiry_hours: int = 24
     enable_rate_limiting: bool = True
     rate_limit_per_minute: int = 60

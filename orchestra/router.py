@@ -89,7 +89,7 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         model_id="moonshotai/Kimi-K2.5",
         provider="local",
         base_url="http://localhost:8000/v1",
-        api_key_env="",                       # vLLM needs no key
+        api_key_env="",
         strengths=("reasoning", "coding", "agentic", "vision", "tool_use"),
         cost_input=0.0, cost_output=0.0,
         max_context=262_144,
@@ -223,7 +223,9 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         supports_audio=True, supports_thinking=False,  # E2B: audio but no thinking
         architecture="efficient", parameters_b=2.0, on_device=True,
     ),
-    # Local deployments
+    # Local vLLM / Ollama deployments — zero cost, no API key required.
+    # Registered here so the router can select them when a local server is
+    # running. Use ModelRouter(isolated=True) in unit tests to exclude them.
     "gemma-4-31b-vllm": ModelConfig(
         model_id="gemma-4-31b-it",
         provider="local",
@@ -280,6 +282,21 @@ DEFAULT_MODELS: dict[str, ModelConfig] = {
         max_context=32_768,
         supports_tools=False, supports_vision=False,
     ),
+
+    # ── OpenCode (local software engineering agent) ───────────────────────
+    "opencode": ModelConfig(
+        model_id="opencode",
+        provider="opencode",
+        base_url="",
+        api_key_env="",
+        strengths=("coding", "tool_use", "agentic", "reasoning"),
+        cost_input=0.0, cost_output=0.0,
+        max_context=128_000,
+        supports_tools=True, supports_vision=False,
+        supports_audio=False, supports_thinking=False,
+        architecture="", parameters_b=0.0,
+        on_device=True,
+    ),
 }
 
 # Convenience set of all Gemma 4 model keys
@@ -298,8 +315,11 @@ class ModelRouter:
     def __init__(
         self,
         custom_models: dict[str, ModelConfig] | None = None,
+        isolated: bool = False,
     ) -> None:
-        self.models: dict[str, ModelConfig] = dict(DEFAULT_MODELS)
+        # isolated=True starts with an empty registry — useful in unit tests
+        # that want to control exactly which models participate in routing.
+        self.models: dict[str, ModelConfig] = {} if isolated else dict(DEFAULT_MODELS)
         if custom_models:
             self.models.update(custom_models)
         self._clients: dict[str, AsyncOpenAI] = {}

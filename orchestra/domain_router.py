@@ -119,13 +119,13 @@ class DomainRoute:
 
 DOMAIN_CONFIGS: dict[str, dict[str, Any]] = {
     "coding": {
-        "primary_models": ["claude-opus-4.6", "gemma-4-31b", "kimi-k2.5"],
+        "primary_models": ["opencode", "claude-opus-4.6", "gemma-4-31b", "kimi-k2.5"],
         "effort": "high",
         "policy": "strict",  # code execution can be dangerous
         "max_iterations": 300,
         "temperature": 0.3,
         "thinking_budget": 32_768,
-        "tool_preferences": ["execute_code", "file_read", "file_write", "web_search"],
+        "tool_preferences": ["opencode_task", "execute_code", "file_read", "file_write", "web_search", "science_analyze", "science_pubchem_search"],
         "description": (
             "Software engineering: implementation, refactoring, debugging, "
             "code review, architecture design"
@@ -138,7 +138,7 @@ DOMAIN_CONFIGS: dict[str, dict[str, Any]] = {
         "max_iterations": 200,
         "temperature": 0.5,
         "thinking_budget": 24_576,
-        "tool_preferences": ["web_search", "fetch_url", "file_write", "memory_search"],
+        "tool_preferences": ["web_search", "fetch_url", "file_write", "memory_search", "science_analyze", "science_pubchem_search", "science_literature_review", "science_docking", "science_generate_report"],
         "description": (
             "Deep research: multi-source analysis, fact-finding, "
             "literature review, competitive intelligence"

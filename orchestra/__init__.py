@@ -18,6 +18,8 @@ Quick start::
         print(event)
 """
 
+import os
+
 # ── Router ──────────────────────────────────────────────────────────────────
 from .router import ModelConfig, ModelRouter, DEFAULT_MODELS
 
@@ -120,6 +122,13 @@ try:
 except ImportError:
     pass  # anthropic SDK not installed
 
+# ── OpenCode Provider ───────────────────────────────────────────────────────
+from .opencode_provider import (
+    OpenCodeProvider,
+    OpenCodeConfig,
+    OpenCodeResult,
+)
+
 # ── Security ────────────────────────────────────────────────────────────────
 try:
     from .security import (
@@ -194,6 +203,12 @@ try:
         UsageBudget,
         UsageSnapshot,
         TIER_LIMITS,
+    )
+    from .billing.scaffold import (
+        BillingScaffold,
+        ScaffoldConfig,
+        TierTranslation,
+        create_billing_router,
     )
 except ImportError:
     pass
@@ -270,6 +285,44 @@ try:
 except ImportError:
     pass
 
+# ── Dual-plane architecture ──────────────────────────────────────────────────
+try:
+    from .planes import AgentPlane, APIPlane, PlaneConfig, PlatformGateway
+except ImportError:
+    pass
+
+# ── Async DB pool ─────────────────────────────────────────────────────────────
+try:
+    from .db import AsyncPool, get_pool, close_pool
+except ImportError:
+    pass
+
+# ── Distributed job queue ─────────────────────────────────────────────────────
+try:
+    from .queue import Job, JobQueue, Worker, get_queue, set_queue
+except ImportError:
+    pass
+
+# ── Pinecone ──────────────────────────────────────────────────────────────────
+try:
+    from .embeddings.pinecone import PineconeStore, PineconeMetric, PineconeCloud, PineconeRegion
+except ImportError:
+    pass
+
+# ── Supabase ───────────────────────────────────────────────────────────────────
+try:
+    from .embeddings.supabase import SupabaseVectorStore, SupabaseDistanceMetric
+except ImportError:
+    pass
+
+# ── Embedding Cache ────────────────────────────────────────────────────────────
+try:
+    from .embeddings.cache import EmbeddingCache, CachedEntry
+except ImportError:
+    pass
+
+# ── Environment Validation (lazy — no side effects on import) ───────────────────
+
 __all__ = [
     # router
     "ModelConfig", "ModelRouter", "DEFAULT_MODELS",
@@ -299,6 +352,8 @@ __all__ = [
     "Opus4Provider", "Opus4Config", "Opus4ThinkingResponse",
     "VisionInput", "Opus4FunctionCall",
     "get_effort_config", "estimate_opus4_cost",
+    # opencode provider
+    "OpenCodeProvider", "OpenCodeConfig", "OpenCodeResult",
     # security
     "SecurityMiddleware", "PermissionPolicy", "PermissionGate",
     "InputSanitizer", "OutputMonitor", "RateLimiter",
@@ -316,6 +371,7 @@ __all__ = [
     "BillingManager", "NullBillingManager", "PricingTier", "UsageType",
     "Customer", "UsageSummary", "BillingEvent",
     "UsageTracker", "NullUsageTracker", "UsageBudget", "UsageSnapshot", "TIER_LIMITS",
+    "BillingScaffold", "ScaffoldConfig", "TierTranslation", "create_billing_router",
     # tasks
     "TaskManager", "TaskSpec", "TaskStore", "Task",
     "TaskStatus", "TaskPriority", "Schedule", "CheckIn", "FileSystemIPC",
@@ -343,7 +399,29 @@ __all__ = [
     # guardian
     "InferenceGateway", "PolicyEngine", "CapabilityLattice",
     "AuditLedger", "BeyondGuardrails", "CodeGuard", "CodeThreat",
-    "CodeScanResult", "IngestionGate", "IngestionViolation", "IngestionReport",
+    "CodeScanResult", "IngestionGate",     "IngestionViolation",     "IngestionReport",
+    # dual-plane architecture
+    "AgentPlane", "APIPlane", "PlaneConfig", "PlatformGateway",
+    # async db pool
+    "AsyncPool", "get_pool", "close_pool",
+    # distributed job queue
+    "Job", "JobQueue", "Worker", "get_queue", "set_queue",
+    # pinecone
+    "PineconeStore", "PineconeMetric", "PineconeCloud", "PineconeRegion",
+    # supabase
+    "SupabaseVectorStore", "SupabaseDistanceMetric",
+    # embeddings
+    "EmbeddingCache", "CachedEntry",
 ]
+
+# ── code_agent subpackage (migrated from src/code_agent/) ─────────────────────
+# Lazy import — loading all 992 files on `import orchestra` adds ~15s
+import importlib as _importlib
+import types as _types
+
+def __getattr__(name: str) -> _types.ModuleType:
+    if name == "code_agent":
+        return _importlib.import_module(".code_agent", __package__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __version__ = "0.8.0"

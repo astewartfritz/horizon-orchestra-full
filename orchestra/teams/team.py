@@ -830,7 +830,7 @@ class OrchestraTeam:
         tasks: List[TeamTask] = []
 
         # Heuristic: create one task per specialist
-        available = [s for s in self._specialists.values() if s.is_available or True]
+        available = [s for s in self._specialists.values() if s.is_available]
         if not available:
             # No specialists — create a single coordinator task
             task = TeamTask(

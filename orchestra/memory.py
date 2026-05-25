@@ -1,20 +1,8 @@
-"""Horizon Orchestra — Persistent Memory System.
+"""Legacy memory system — DEPRECATED.
 
-Horizon Prince cross-session memory system:
-
-* **Semantic search** — embed user facts and retrieve by cosine similarity.
-* **Automatic fact extraction** — the LLM distils durable facts from
-  conversations and stores them without being asked.
-* **Session context** — rolling window of recent turns available to every
-  agent in the loop.
-* **Categorised storage** — facts are tagged (preference, project, person,
-  tool, workflow, identity) for filtered retrieval.
-* **Multiple backends** — SQLite+numpy for zero-dependency local use,
-  or PostgreSQL+pgvector for production.
-
-The memory system is exposed as tools that plug directly into
-:class:`~orchestra.agent_loop.ToolRegistry` so every agent can
-``memory_search`` and ``memory_store`` mid-loop.
+Prefer ``orchestra.code_agent.memory`` (MemoryManager, SessionStore, etc.)
+for new code. This module is kept for backward compatibility and will be
+removed in a future version.
 """
 
 from __future__ import annotations
@@ -30,7 +18,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
 
-from openai import AsyncOpenAI
+from orchestra.embeddings.models import (
+    CANONICAL_EMBEDDING_CLIENT,
+    EmbeddingClient,
+    cosine_similarity,
+    hash_embed,
+)
 
 __all__ = [
     "MemoryEntry",
@@ -100,78 +93,65 @@ class SessionContext:
 # ---------------------------------------------------------------------------
 
 class Embedder:
-    """Generate text embeddings via OpenAI-compatible API.
+    """Generate text embeddings via the canonical EmbeddingClient.
 
-    Tries Perplexity ``sonar-embedding`` first, then falls back to
-    OpenAI ``text-embedding-3-small``, then to a local hash-based
-    stub (no API key needed, but lower quality).
+    Tries OpenAI/Voyage/Nomic via EmbeddingClient first, then falls back
+    to a local hash-based stub (no API key needed).
     """
 
     def __init__(self) -> None:
-        self._client: AsyncOpenAI | None = None
-        self._model: str = ""
-        self._dim: int = 0
+        self._client: EmbeddingClient | None = None
+        self._dim: int = 256
+        self._hash_dim: int = 256
 
     async def _init_client(self) -> None:
-        pplx = os.environ.get("PERPLEXITY_API_KEY")
-        if pplx:
-            self._client = AsyncOpenAI(base_url="https://api.perplexity.ai", api_key=pplx)
-            self._model = "sonar-embedding"
-            self._dim = 1536
+        # Check for any available API key before creating client
+        has_key = bool(os.environ.get("OPENAI_API_KEY") or
+                       os.environ.get("PERPLEXITY_API_KEY") or
+                       os.environ.get("VOYAGE_API_KEY") or
+                       os.environ.get("NOMIC_API_KEY"))
+        if not has_key:
+            self._client = None
+            self._dim = self._hash_dim
+            log.warning("No embedding API key found; using hash-based stub embeddings")
             return
 
-        oai = os.environ.get("OPENAI_API_KEY")
-        if oai:
-            self._client = AsyncOpenAI(api_key=oai)
-            self._model = "text-embedding-3-small"
-            self._dim = 1536
-            return
-
-        # Stub: deterministic hash-based pseudo-embedding (for offline dev)
-        self._client = None
-        self._model = "local-hash"
-        self._dim = 256
-        log.warning("No embedding API key found; using hash-based stub embeddings")
+        self._client = CANONICAL_EMBEDDING_CLIENT()
+        available = [m for m in self._client.list_models() if m["available"]]
+        if available:
+            self._dim = available[0]["dimensions"]
+        else:
+            self._client = None
+            self._dim = self._hash_dim
+            log.warning("No embedding API key found; using hash-based stub embeddings")
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        if not self._model:
+        if self._client is None:
             await self._init_client()
 
         if self._client is None:
-            # Hash stub
-            return [self._hash_embed(t) for t in texts]
+            return [hash_embed(t, self._hash_dim) for t in texts]
 
         try:
-            resp = await self._client.embeddings.create(model=self._model, input=texts)
-            return [d.embedding for d in resp.data]
+            return await self._client.batch_embed(texts)
         except Exception as exc:
             log.warning("Embedding API call failed (%s); falling back to hash stub", exc)
-            return [self._hash_embed(t) for t in texts]
+            return [hash_embed(t, self._hash_dim) for t in texts]
 
     async def embed_one(self, text: str) -> list[float]:
-        results = await self.embed([text])
-        return results[0]
-
-    def _hash_embed(self, text: str) -> list[float]:
-        """Deterministic pseudo-embedding from SHA-256 (offline fallback)."""
-        h = hashlib.sha256(text.encode()).digest()
-        # Expand to _dim floats in [-1, 1]
-        import struct
-        floats: list[float] = []
-        while len(floats) < self._dim:
-            h = hashlib.sha256(h).digest()
-            for i in range(0, len(h), 4):
-                if len(floats) >= self._dim:
-                    break
-                val = struct.unpack("f", h[i:i+4])[0]
-                # Normalise to [-1, 1]
-                clamped = max(-1.0, min(1.0, val / 1e38 if abs(val) > 1 else val))
-                floats.append(clamped)
-        return floats[:self._dim]
+        if self._client is None:
+            await self._init_client()
+        if self._client is None:
+            return hash_embed(text, self._hash_dim)
+        try:
+            return await self._client.embed(text)
+        except Exception as exc:
+            log.warning("Embedding API call failed (%s); falling back to hash stub", exc)
+            return hash_embed(text, self._hash_dim)
 
     @property
     def dim(self) -> int:
-        return self._dim or 256
+        return self._dim or self._hash_dim
 
 
 # ---------------------------------------------------------------------------
@@ -386,15 +366,8 @@ class MemoryStore:
 
     @staticmethod
     def _cosine(a: list[float], b: list[float]) -> float:
-        """Cosine similarity between two vectors."""
-        if len(a) != len(b) or not a:
-            return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = sum(x * x for x in a) ** 0.5
-        norm_b = sum(x * x for x in b) ** 0.5
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-        return dot / (norm_a * norm_b)
+        """Cosine similarity between two vectors (delegates to shared impl)."""
+        return cosine_similarity(a, b)
 
     def _row_to_entry(self, row: sqlite3.Row, relevance: float = 0.0) -> MemoryEntry:
         return MemoryEntry(

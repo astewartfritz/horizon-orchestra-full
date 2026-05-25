@@ -3,14 +3,19 @@
 Unified embedding client supporting OpenAI, Voyage AI, Nomic, and BAAI models.
 Uses OpenAI-compatible clients for OpenAI models and httpx for third-party
 providers, with automatic chunking and retry logic.
+
+Also provides shared utility functions (cosine_similarity, hash_embed) used
+across the codebase — all embedding implementations delegate here.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import math
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -26,7 +31,83 @@ __all__ = [
     "EmbeddingModel",
     "EMBEDDING_MODELS",
     "EmbeddingClient",
+    "cosine_similarity",
+    "hash_embed",
+    "CANONICAL_EMBEDDING_CLIENT",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Shared utility functions — every embedding implementation should use these
+# instead of reimplementing them.
+# ---------------------------------------------------------------------------
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity between two vectors.
+
+    Shared implementation used by all embedding modules.
+    """
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0 or nb == 0:
+        return 0.0
+    return dot / (na * nb)
+
+
+def hash_embed(text: str, dim: int = 256) -> list[float]:
+    """Deterministic pseudo-embedding via SHA-256.
+
+    Offline fallback when no API key is configured.  Produces a normalised
+    vector of *dim* floats in approximately [-1, 1].
+    """
+    import struct
+    h = hashlib.sha256(text.encode()).digest()
+    floats: list[float] = []
+    while len(floats) < dim:
+        h = hashlib.sha256(h).digest()
+        for i in range(0, len(h), 4):
+            if len(floats) >= dim:
+                break
+            val = struct.unpack("f", h[i:i + 4])[0]
+            clamped = max(-1.0, min(1.0, val / 1e38 if abs(val) > 1 else val))
+            floats.append(clamped)
+    return floats[:dim]
+
+
+def _md5_hash_embed(text: str, dim: int = 128) -> list[float]:
+    """MD5-based hash embedding (legacy format used by code_agent memory)."""
+    tokens = re.findall(r"\w+", text.lower())
+    vec = [0.0] * dim
+    for i, token in enumerate(tokens):
+        h = hashlib.md5(token.encode()).hexdigest()
+        idx = int(h[:8], 16) % dim
+        vec[idx] += 1.0 / (1.0 + i * 0.01)
+    mag = math.sqrt(sum(v * v for v in vec))
+    if mag > 0:
+        vec = [v / mag for v in vec]
+    return vec
+
+
+# ---------------------------------------------------------------------------
+# Lazy canonical embedding client singleton (no API keys read on import)
+# ---------------------------------------------------------------------------
+
+_CANONICAL_CLIENT: EmbeddingClient | None = None
+
+
+def CANONICAL_EMBEDDING_CLIENT() -> EmbeddingClient:
+    """Return (or create) the canonical singleton EmbeddingClient.
+
+    Lazy — no API keys are read until the first call.
+    """
+    global _CANONICAL_CLIENT
+    if _CANONICAL_CLIENT is None:
+        _CANONICAL_CLIENT = EmbeddingClient()
+    return _CANONICAL_CLIENT
 
 log = logging.getLogger("orchestra.embeddings.models")
 
@@ -231,6 +312,7 @@ class EmbeddingClient:
         max_retries: int = 3,
         base_delay: float = 1.0,
         max_batch_size: int = 2048,
+        cache: EmbeddingCache | None = None,
     ) -> None:
         self.models: dict[str, EmbeddingModel] = dict(EMBEDDING_MODELS)
         if custom_models:
@@ -242,6 +324,9 @@ class EmbeddingClient:
         # Cached OpenAI clients keyed by (base_url, api_key_env)
         self._openai_clients: dict[tuple[str, str], AsyncOpenAI] = {}
         self._httpx_client: Any = None  # lazy httpx.AsyncClient
+
+        # Embedding result cache
+        self._cache: EmbeddingCache | None = cache
 
     # -- helpers ------------------------------------------------------------
 
@@ -393,22 +478,33 @@ class EmbeddingClient:
         list[float]
             The embedding vector.
         """
+        # Check cache first
+        if self._cache is not None:
+            cached = self._cache.get(text, model=model)
+            if cached is not None:
+                return cached
+
         spec = self._resolve_model(model)
         chunks = _chunk_text(text, spec.max_tokens)
 
         if len(chunks) == 1:
             results = await self._dispatch_embed(chunks, spec)
-            return results[0]
+            vec = results[0]
+        else:
+            # Mean-pool across chunks
+            log.debug(
+                "Text too long for %s (est. tokens > %d); splitting into %d chunks",
+                spec.name,
+                spec.max_tokens,
+                len(chunks),
+            )
+            all_vecs = await self._dispatch_embed(chunks, spec)
+            vec = self._mean_pool(all_vecs)
 
-        # Mean-pool across chunks
-        log.debug(
-            "Text too long for %s (est. tokens > %d); splitting into %d chunks",
-            spec.name,
-            spec.max_tokens,
-            len(chunks),
-        )
-        all_vecs = await self._dispatch_embed(chunks, spec)
-        return self._mean_pool(all_vecs)
+        # Store in cache
+        if self._cache is not None:
+            self._cache.put(text, vec, model=model)
+        return vec
 
     async def batch_embed(
         self,
@@ -419,6 +515,7 @@ class EmbeddingClient:
 
         Long texts are automatically chunked and mean-pooled.  The batch
         is split into sub-batches that respect the provider's limits.
+        Results are cached to avoid re-embedding identical texts.
 
         Parameters
         ----------
@@ -435,11 +532,36 @@ class EmbeddingClient:
         if not texts:
             return []
 
+        # Check cache for as many as possible
+        cache = self._cache
+        if cache is not None and len(texts) > 1:
+            hits, miss_indices = cache.get_batch(texts, model=model)
+            if not miss_indices:
+                return [hits[i] for i in range(len(texts))]
+            # Embed only the misses
+            miss_texts = [texts[i] for i in miss_indices]
+            miss_results = await self._batch_embed_no_cache(miss_texts, model=model)
+            cache.put_batch(miss_texts, miss_results, model=model)
+            # Reconstruct full output
+            results: list[list[float]] = [None] * len(texts)  # type: ignore[list-item]
+            for idx, vec in hits.items():
+                results[idx] = vec
+            for idx, vec in zip(miss_indices, miss_results):
+                results[idx] = vec
+            return results
+
+        return await self._batch_embed_no_cache(texts, model=model)
+
+    async def _batch_embed_no_cache(
+        self,
+        texts: list[str],
+        model: str,
+    ) -> list[list[float]]:
+        """Embed multiple texts without cache lookups."""
         spec = self._resolve_model(model)
         results: list[list[float]] = [[] for _ in texts]
 
-        # Identify which texts need chunking
-        single_texts: list[tuple[int, str]] = []  # (original_idx, text)
+        single_texts: list[tuple[int, str]] = []
         chunked_texts: list[tuple[int, list[str]]] = []
 
         for i, t in enumerate(texts):
@@ -449,7 +571,6 @@ class EmbeddingClient:
             else:
                 chunked_texts.append((i, chunks))
 
-        # Batch-embed all single-chunk texts in sub-batches
         for batch_start in range(0, len(single_texts), self._max_batch_size):
             batch = single_texts[batch_start : batch_start + self._max_batch_size]
             batch_texts = [t for _, t in batch]
@@ -457,7 +578,6 @@ class EmbeddingClient:
             for (orig_idx, _), vec in zip(batch, vecs):
                 results[orig_idx] = vec
 
-        # Handle chunked texts individually (mean-pool each)
         for orig_idx, chunks in chunked_texts:
             vecs = await self._dispatch_embed(chunks, spec)
             results[orig_idx] = self._mean_pool(vecs)
@@ -502,10 +622,12 @@ class EmbeddingClient:
         return out
 
     async def close(self) -> None:
-        """Close underlying HTTP clients."""
+        """Close underlying HTTP clients and cache."""
         if self._httpx_client is not None:
             await self._httpx_client.aclose()
             self._httpx_client = None
         for client in self._openai_clients.values():
             await client.close()
         self._openai_clients.clear()
+        if self._cache is not None:
+            self._cache.close()

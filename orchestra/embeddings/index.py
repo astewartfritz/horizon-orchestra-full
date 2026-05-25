@@ -392,14 +392,13 @@ class VectorIndex:
     def delete(self, id: str) -> bool:
         """Remove a vector by id.  Returns True if found and removed.
 
-        Note: deletion from HNSW is not supported — the graph is rebuilt
-        lazily if needed.  For brute-force search, deletion is immediate.
+        HNSW graph is invalidated lazily — rebuilt on the next search
+        that requests HNSW.  Brute-force deletion is immediate O(1).
         """
         idx = self._id_to_idx.get(id)
         if idx is None:
             return False
 
-        # Swap-remove with last element for O(1) deletion
         last_idx = len(self._ids) - 1
         if idx != last_idx:
             last_id = self._ids[last_idx]
@@ -413,13 +412,44 @@ class VectorIndex:
         self._metadata.pop()
         del self._id_to_idx[id]
         self._np_dirty = True
-
-        # Mark HNSW as needing rebuild
-        if self._hnsw is not None:
-            log.debug("HNSW graph invalidated by deletion of %s — will rebuild on next search", id)
-            self._hnsw = None  # force rebuild on next search
+        self._invalidate_hnsw()
 
         return True
+
+    def batch_delete(self, ids: list[str]) -> int:
+        """Delete multiple vectors by id.  Returns count of deletions.
+
+        Invalidates HNSW only once (after all deletions), avoiding
+        repeated rebuilds.
+        """
+        count = 0
+        for id_ in ids:
+            idx = self._id_to_idx.get(id_)
+            if idx is None:
+                continue
+            last_idx = len(self._ids) - 1
+            if idx != last_idx:
+                last_id = self._ids[last_idx]
+                self._ids[idx] = last_id
+                self._vectors[idx] = self._vectors[last_idx]
+                self._metadata[idx] = self._metadata[last_idx]
+                self._id_to_idx[last_id] = idx
+            self._ids.pop()
+            self._vectors.pop()
+            self._metadata.pop()
+            del self._id_to_idx[id_]
+            count += 1
+
+        if count > 0:
+            self._np_dirty = True
+            self._invalidate_hnsw()
+        return count
+
+    def _invalidate_hnsw(self) -> None:
+        """Mark HNSW as needing rebuild.  Calls set ``_hnsw = None``."""
+        if self._hnsw is not None:
+            log.debug("HNSW graph invalidated — will rebuild on next search")
+            self._hnsw = None
 
     def update(
         self,

@@ -492,7 +492,143 @@ def create_app(config: ProductionConfig | None = None) -> Any:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "architecture": "E", "version": "0.1.0"}
+        import shutil as _sh
+        cli_available = bool(_sh.which("claude"))
+        api_ready = bool(os.environ.get("ANTHROPIC_API_KEY"))
+        return {
+            "status": "ok", "architecture": "E", "version": "0.1.0",
+            "claude_cli": cli_available, "claude_api": api_ready,
+        }
+
+    # -- SSE streaming --------------------------------------------------------
+    @app.get("/v1/run/stream")
+    async def run_stream_sse(
+        task: str,
+        user_id: str = "default",
+        architecture: str = "A",
+    ):
+        """Stream agent execution as Server-Sent Events."""
+        from fastapi.responses import StreamingResponse
+
+        async def _events():
+            try:
+                orch = make_orchestrator(user_id, architecture)
+                async for event in orch.stream(task):
+                    ev: dict[str, Any] = {}
+                    if isinstance(event, ToolCallEvent):
+                        ev = {"type": "tool_call", "tool": event.tool_name, "iteration": getattr(event, "iteration", 0)}
+                    elif isinstance(event, ToolResultEvent):
+                        ev = {"type": "tool_result", "tool": event.tool_name, "success": event.success, "duration": round(event.duration, 2)}
+                    elif isinstance(event, FinalAnswerEvent):
+                        ev = {"type": "final", "content": event.content, "iterations": getattr(event, "total_iterations", 0), "tool_calls": getattr(event, "total_tool_calls", 0)}
+                        yield f"data: {json.dumps(ev)}\n\n"
+                        break
+                    elif isinstance(event, ErrorEvent):
+                        ev = {"type": "error", "message": event.message}
+                        yield f"data: {json.dumps(ev)}\n\n"
+                        break
+                    else:
+                        continue
+                    if ev:
+                        yield f"data: {json.dumps(ev)}\n\n"
+            except Exception as exc:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            _events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # -- API key management ---------------------------------------------------
+    _env_file = Path(__file__).parent.parent / ".env"
+
+    class KeysRequest(BaseModel):
+        anthropic_api_key: str = ""
+        openai_api_key: str = ""
+        openrouter_api_key: str = ""
+
+    @app.post("/v1/config/keys")
+    async def set_keys(req: KeysRequest):
+        """Write API keys to .env and reload into os.environ."""
+        lines: list[str] = []
+        if _env_file.exists():
+            skip = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"}
+            lines = [ln for ln in _env_file.read_text().splitlines()
+                     if not any(ln.startswith(k) for k in skip)]
+        if req.anthropic_api_key:
+            lines.append(f"ANTHROPIC_API_KEY={req.anthropic_api_key}")
+            os.environ["ANTHROPIC_API_KEY"] = req.anthropic_api_key
+        if req.openai_api_key:
+            lines.append(f"OPENAI_API_KEY={req.openai_api_key}")
+            os.environ["OPENAI_API_KEY"] = req.openai_api_key
+        if req.openrouter_api_key:
+            lines.append(f"OPENROUTER_API_KEY={req.openrouter_api_key}")
+            os.environ["OPENROUTER_API_KEY"] = req.openrouter_api_key
+        _env_file.write_text("\n".join(lines) + "\n")
+        keys_set = [k for k, v in [("anthropic", req.anthropic_api_key), ("openai", req.openai_api_key), ("openrouter", req.openrouter_api_key)] if v]
+        return {"saved": True, "keys_set": keys_set}
+
+    @app.get("/v1/config/keys")
+    async def get_key_status():
+        """Return which keys are configured (never the values)."""
+        return {
+            "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "openai": bool(os.environ.get("OPENAI_API_KEY")),
+            "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
+        }
+
+    # -- Billing tiers --------------------------------------------------------
+    @app.get("/v1/billing/tiers")
+    async def list_billing_tiers():
+        """Return available subscription tiers."""
+        return [
+            {"tier": "maker", "name": "Maker", "price_monthly": 0, "price_annual": 0,
+             "features": ["Local models (Gemma, Ollama)", "1,000 tool calls/mo", "10 sessions/day", "Basic memory (100 entries)"]},
+            {"tier": "builder", "name": "Builder", "price_monthly": 29, "price_annual": 290,
+             "features": ["All Maker features", "Cloud models (Kimi K2.5, Sonar, Grok)", "Swarm up to 5 agents", "$10 model credit/mo", "10,000 tool calls/mo"]},
+            {"tier": "pro", "name": "Pro", "price_monthly": 99, "price_annual": 990,
+             "features": ["All Builder features", "Claude Opus 4.7 access", "Full Architecture E stack", "$50 model credit/mo", "Unlimited sessions"]},
+            {"tier": "enterprise", "name": "Enterprise", "price_monthly": 499, "price_annual": 4990,
+             "features": ["All Pro features", "Custom security policies", "Audit logs & compliance reports", "$200 model credit/mo", "Priority support SLA"]},
+        ]
+
+    # -- Notifications --------------------------------------------------------
+    @app.get("/v1/notifications")
+    async def get_notifications(user_id: str = "default", since: float = 0.0):
+        """Return recently completed/failed jobs as notifications."""
+        jobs = task_queue.list_jobs(user_id=user_id, limit=200)
+        return [
+            {
+                "id": j.id,
+                "job_id": j.id,
+                "title": "Task " + ("complete" if j.status == "complete" else "failed"),
+                "body": j.task[:100],
+                "status": j.status,
+                "completed_at": j.completed_at,
+                "duration": round(j.duration or 0, 1),
+            }
+            for j in jobs
+            if j.completed_at > since and j.status in ("complete", "failed")
+        ]
+
+    # -- Usage dashboard ------------------------------------------------------
+    @app.get("/v1/usage/dashboard")
+    async def usage_dashboard(user_id: str = "default"):
+        """Return aggregated session usage stats."""
+        jobs = task_queue.list_jobs(user_id=user_id, limit=500)
+        by_status: dict[str, int] = {"complete": 0, "failed": 0, "running": 0, "pending": 0}
+        total_dur = 0.0
+        for j in jobs:
+            by_status[j.status] = by_status.get(j.status, 0) + 1
+            total_dur += j.duration or 0
+        return {
+            "jobs_total": len(jobs),
+            "jobs_by_status": by_status,
+            "avg_duration_seconds": round(total_dur / len(jobs), 1) if jobs else 0,
+            "total_compute_seconds": round(total_dur, 1),
+        }
 
     return app
 

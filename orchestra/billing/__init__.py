@@ -40,6 +40,12 @@ from .middleware import (
     BillingEvent,
     billing_gate,
 )
+from .scaffold import (
+    BillingScaffold,
+    ScaffoldConfig,
+    TierTranslation,
+    create_billing_router,
+)
 
 __all__ = [
     # Core Stripe
@@ -67,4 +73,9 @@ __all__ = [
     "BillingWrappedAgent",
     "BillingEvent",
     "billing_gate",
+    # Scaffold
+    "BillingScaffold",
+    "ScaffoldConfig",
+    "TierTranslation",
+    "create_billing_router",
 ]

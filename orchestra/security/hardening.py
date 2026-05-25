@@ -84,6 +84,9 @@ class SecurityConfig:
     encryption_key: str = field(
         default_factory=lambda: os.environ.get("SECURITY_ENCRYPTION_KEY", "")
     )
+    # Paths exempt from adversarial filter (e.g. auth endpoints whose bodies
+    # contain words like "password" that look like exfiltration attempts)
+    adversarial_filter_excluded_paths: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -1112,6 +1115,8 @@ class SecurityHardening:
 
             security_self = self
 
+            _excluded = set(security_self._config.adversarial_filter_excluded_paths)
+
             class _SecurityMiddleware(BaseHTTPMiddleware):
                 async def dispatch(self, request: Request, call_next: Callable) -> Any:
                     # Build the security request dict
@@ -1127,6 +1132,14 @@ class SecurityHardening:
                     except json.JSONDecodeError:
                         body_parsed = body_str
 
+                    # Skip adversarial filter for explicitly excluded paths
+                    # (e.g. auth endpoints whose bodies contain "password")
+                    req_path = request.url.path
+                    skip_adversarial = any(
+                        req_path == p or req_path.startswith(p)
+                        for p in _excluded
+                    )
+
                     sec_req = {
                         "method": request.method,
                         "path": str(request.url),
@@ -1134,7 +1147,7 @@ class SecurityHardening:
                         "body": body_parsed,
                         "ip": request.client.host if request.client else "",
                         "user_id": None,  # filled by auth dependency
-                        "text": body_str,
+                        "text": "" if skip_adversarial else body_str,
                     }
 
                     result = await security_self.check_request(sec_req)

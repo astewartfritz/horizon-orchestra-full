@@ -386,26 +386,27 @@ class TextChunker:
         separators: list[str],
         chunk_size: int,
     ) -> list[str]:
-        """Recursively split text, trying each separator in order."""
-        if count_tokens(text) <= chunk_size:
+        """Recursively split text, trying each separator in order.
+
+        Splits down to the finest granularity the separator list allows.
+        Chunk-size enforcement is delegated to _merge_segments.
+        """
+        if not separators or count_tokens(text) <= 1:
             return [text]
 
         for i, sep in enumerate(separators):
             parts = _split_on_separator(text, sep) if sep else [text[j:j+1] for j in range(len(text))]
             if len(parts) <= 1:
                 continue
-            # Recursively split any parts that are still too large
+            # Separator found — keep splitting every part with the remaining
+            # (finer) separators rather than stopping at chunk_size here.
             result: list[str] = []
             for part in parts:
-                if count_tokens(part) <= chunk_size:
-                    result.append(part)
-                else:
-                    result.extend(
-                        self._recursive_split(part, separators[i + 1:], chunk_size)
-                    )
+                result.extend(
+                    self._recursive_split(part, separators[i + 1:], chunk_size)
+                )
             return result
 
-        # If no separator worked, just truncate
         return [_truncate_to_tokens(text, chunk_size)]
 
     # -- helper: merge small segments into chunks ---------------------------
@@ -424,6 +425,20 @@ class TextChunker:
         """
         if not segments:
             return []
+
+        # Ensure no single segment exceeds chunk_size before merging.
+        # Sentence/paragraph strategies can produce segments larger than the
+        # limit (e.g. a single very long paragraph).  Recursively split them
+        # so that _merge_segments never sees a segment it cannot fit.
+        normalized: list[str] = []
+        for seg in segments:
+            if count_tokens(seg) > chunk_size:
+                normalized.extend(
+                    self._recursive_split(seg, _DEFAULT_SEPARATORS, chunk_size)
+                )
+            else:
+                normalized.append(seg)
+        segments = normalized
 
         chunks: list[Chunk] = []
         current_parts: list[str] = []

@@ -188,7 +188,7 @@ class DataValidationSkill(Skill):
                 "total_rows": len(df),
                 "duplicate_rows": int(len(dupes)),
                 "duplicate_groups": int(len(groups)),
-                "duplicate_pct": round(len(groups) / len(df) * 100, 2),
+                "duplicate_pct": round(len(groups) / len(df) * 100, 2) if len(df) > 0 else 0.0,
                 "checked_columns": subset or list(df.columns),
                 "sample_duplicates": json.loads(dupes.head(10).to_json(orient="records", date_format="iso")),
             }}))

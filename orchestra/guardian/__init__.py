@@ -51,12 +51,25 @@ Usage
 
 from __future__ import annotations
 
-from orchestra.guardian.inference_gateway import InferenceGateway
-from orchestra.guardian.policy_engine import PolicyEngine
-from orchestra.guardian.capability_lattice import CapabilityLattice
-from orchestra.guardian.audit_ledger import AuditLedger
-from orchestra.guardian.beyond_guardrails import BeyondGuardrails
-from orchestra.guardian.threat_intelligence import ThreatIntelligence
+import importlib
+
+_LAZY_NAMES = {
+    "InferenceGateway": "orchestra.guardian.inference_gateway",
+    "PolicyEngine": "orchestra.guardian.policy_engine",
+    "CapabilityLattice": "orchestra.guardian.capability_lattice",
+    "AuditLedger": "orchestra.guardian.audit_ledger",
+    "BeyondGuardrails": "orchestra.guardian.beyond_guardrails",
+    "ThreatIntelligence": "orchestra.guardian.threat_intelligence",
+}
+
+def __getattr__(name: str):
+    module_name = _LAZY_NAMES.get(name)
+    if module_name is not None:
+        module = importlib.import_module(module_name)
+        return getattr(module, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
+
 from orchestra.guardian.security_config import SecurityConfig, SECURITY_CONFIG
 from orchestra.guardian.code_guard import CodeGuard, CodeThreat, CodeScanResult
 from orchestra.guardian.ingestion_gate import (

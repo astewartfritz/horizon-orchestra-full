@@ -111,7 +111,7 @@ class APIConfig:
     max_request_size_mb: int = 10
     enable_security: bool = True
     jwt_secret: str = field(
-        default_factory=lambda: os.environ.get("JWT_SECRET", "change-me-in-production")
+        default_factory=lambda: os.environ.get("JWT_SECRET", "")
     )
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
@@ -251,6 +251,11 @@ if _PYDANTIC_AVAILABLE:
         title: str
         body: str
         data: dict[str, Any] = Field(default_factory=dict)
+
+    class TerminalRunRequest(BaseModel):
+        command: str
+        workdir: str = ""
+        timeout: int = 30000  # ms
 else:
     # Stub classes for when Pydantic is unavailable
     class RegisterRequest: ...         # type: ignore[no-redef]
@@ -264,6 +269,7 @@ else:
     class MemoryStoreRequest: ...      # type: ignore[no-redef]
     class PushRegisterRequest: ...     # type: ignore[no-redef]
     class PushSendRequest: ...         # type: ignore[no-redef]
+    class TerminalRunRequest: ...      # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -346,18 +352,34 @@ def create_production_app(config: APIConfig | None = None) -> Any:
 
     # ── Security headers middleware ───────────────────────────────────
     class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-        """Adds hardened HTTP security headers to every response."""
+        """Adds hardened HTTP security headers to every response.
+
+        API routes (/v1/...) get strict headers.
+        Static GUI routes get a relaxed CSP (allows inline styles/scripts).
+        """
         async def dispatch(self, request: Request, call_next: Any) -> Any:
             response = await call_next(request)
+            is_api = request.url.path.startswith(f"/{config.api_version}/")
             response.headers["X-Content-Type-Options"] = "nosniff"
-            response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"
-            )
+            if is_api:
+                response.headers["X-Frame-Options"] = "DENY"
+                response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"
+                )
+            else:
+                # GUI: allow inline styles (JS-injected <style> tags) and same-origin scripts
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline'; "
+                    "style-src 'self' 'unsafe-inline'; "
+                    "img-src 'self' data:; "
+                    "font-src 'self' data:; "
+                    "object-src 'none'"
+                )
             return response
 
     app.add_middleware(SecurityHeadersMiddleware)
@@ -385,7 +407,11 @@ def create_production_app(config: APIConfig | None = None) -> Any:
     security: SecurityHardening | None = None
     if _SECURITY_AVAILABLE and config.enable_security:
         try:
-            security = SecurityHardening(SecurityConfig())
+            security = SecurityHardening(SecurityConfig(
+                # Auth endpoints contain "password" in JSON bodies — exempt them
+                # from the adversarial filter (WAF still runs on all routes)
+                adversarial_filter_excluded_paths=[f"/{config.api_version}/auth/"],
+            ))
             security.middleware(app)
             logger.info("SecurityHardening middleware installed")
         except Exception as exc:  # noqa: BLE001
@@ -427,6 +453,19 @@ def create_production_app(config: APIConfig | None = None) -> Any:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin access required",
+            )
+        return current_user
+
+    _OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "ashton@horizon-orchestra.com")
+
+    async def require_owner(
+        current_user: dict[str, Any] = Depends(get_current_user),
+    ) -> dict[str, Any]:
+        """Gate endpoints that return AI-generated code to the platform owner only."""
+        if current_user.get("email", "").lower() != _OWNER_EMAIL.lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Code output is restricted to the platform owner.",
             )
         return current_user
 
@@ -663,7 +702,7 @@ def create_production_app(config: APIConfig | None = None) -> Any:
     async def run_task(
         body: RunRequest,
         request: Request,
-        current_user: dict[str, Any] = Depends(get_current_user),
+        current_user: dict[str, Any] = Depends(require_owner),
     ) -> dict[str, Any]:
         """Execute a task through the agent system."""
         req_id, started = _ctx(request)
@@ -708,6 +747,34 @@ def create_production_app(config: APIConfig | None = None) -> Any:
     async def stream_ws(websocket: WebSocket) -> None:
         """WebSocket endpoint for streaming agent responses."""
         await websocket.accept()
+
+        # Authenticate before processing any messages.
+        # Client must send {"token": "<Bearer token>"} as the first frame.
+        try:
+            auth_frame = await websocket.receive_json()
+            _ws_token = auth_frame.get("token", "").removeprefix("Bearer ").strip()
+            if not _ws_token:
+                await websocket.send_json({"error": "Missing authentication token", "done": True})
+                await websocket.close(code=4401)
+                return
+            try:
+                _ws_payload = _decode_jwt(_ws_token, config.jwt_secret, config.jwt_algorithm)
+            except ValueError:
+                await websocket.send_json({"error": "Invalid token", "done": True})
+                await websocket.close(code=4401)
+                return
+            _ws_user_id = _ws_payload.get("sub")
+            _ws_user = _USERS.get(_ws_user_id, {})
+            _ws_email = _ws_user.get("email", "").lower()
+            if _ws_email != _OWNER_EMAIL.lower():
+                await websocket.send_json({"error": "Code output is restricted to the platform owner.", "done": True})
+                await websocket.close(code=4403)
+                return
+        except Exception:
+            await websocket.send_json({"error": "Authentication failed", "done": True})
+            await websocket.close(code=4401)
+            return
+
         try:
             while True:
                 data = await websocket.receive_json()
@@ -752,7 +819,7 @@ def create_production_app(config: APIConfig | None = None) -> Any:
     async def query_model(
         body: QueryRequest,
         request: Request,
-        current_user: dict[str, Any] = Depends(get_current_user),
+        current_user: dict[str, Any] = Depends(require_owner),
     ) -> dict[str, Any]:
         """Direct model query (bypasses agent orchestration)."""
         req_id, started = _ctx(request)
@@ -762,41 +829,89 @@ def create_production_app(config: APIConfig | None = None) -> Any:
         if billing:
             await billing.record_usage(user_id, requests=1)
 
-        # Attempt real model call
-        response_text = ""
+        # Load .env from project root if present (one-time, no-op if already loaded)
         try:
-            import httpx
-            headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', '')}"}
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": body.model,
-                        "messages": [
-                            *(
-                                [{"role": "system", "content": body.system}]
-                                if body.system
-                                else []
-                            ),
-                            {"role": "user", "content": body.prompt},
-                        ],
-                        "temperature": body.temperature,
-                        "max_tokens": body.max_tokens,
-                    },
+            import dotenv as _dotenv
+            import pathlib as _pl
+            _dotenv.load_dotenv(_pl.Path(__file__).resolve().parents[2] / ".env", override=False)
+        except ImportError:
+            pass
+
+        # Attempt real model call — try Anthropic first, then OpenAI, then stub
+        response_text = ""
+        model_used = body.model
+
+        # ── 1. Anthropic SDK ──────────────────────────────────────────────────
+        _anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not response_text and _anthropic_key:
+            try:
+                import anthropic as _anthropic
+                _claude_model = (
+                    body.model
+                    if body.model.startswith("claude")
+                    else "claude-sonnet-4-5"
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    response_text = (
-                        data["choices"][0]["message"]["content"]
-                        if data.get("choices")
-                        else ""
+                _aclient = _anthropic.AsyncAnthropic(api_key=_anthropic_key)
+                _msgs: list[Any] = [{"role": "user", "content": body.prompt}]
+                _kwargs: dict[str, Any] = dict(
+                    model=_claude_model,
+                    max_tokens=body.max_tokens,
+                    messages=_msgs,
+                )
+                if body.system:
+                    _kwargs["system"] = body.system
+                _resp = await _aclient.messages.create(**_kwargs)
+                response_text = _resp.content[0].text if _resp.content else ""
+                model_used = _claude_model
+                logger.info("Anthropic response via %s (%d chars)", _claude_model, len(response_text))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Anthropic query failed: %s", exc)
+
+        # ── 2. OpenAI SDK ─────────────────────────────────────────────────────
+        _openai_key = os.environ.get("OPENAI_API_KEY", "")
+        if not response_text and _openai_key:
+            try:
+                import httpx
+                _oai_headers = {"Authorization": f"Bearer {_openai_key}"}
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers=_oai_headers,
+                        json={
+                            "model": body.model,
+                            "messages": [
+                                *(
+                                    [{"role": "system", "content": body.system}]
+                                    if body.system
+                                    else []
+                                ),
+                                {"role": "user", "content": body.prompt},
+                            ],
+                            "temperature": body.temperature,
+                            "max_tokens": body.max_tokens,
+                        },
                     )
-                else:
-                    response_text = f"[Model API error {resp.status_code}]"
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Model query failed: %s", exc)
-            response_text = f"[Stub response for: {body.prompt[:80]}]"
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        response_text = (
+                            data["choices"][0]["message"]["content"]
+                            if data.get("choices")
+                            else ""
+                        )
+                        model_used = body.model
+                    else:
+                        logger.warning("OpenAI error %s", resp.status_code)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("OpenAI query failed: %s", exc)
+
+        # ── 3. Stub ───────────────────────────────────────────────────────────
+        if not response_text:
+            response_text = (
+                f"**No API key configured.** To enable live responses, set "
+                f"`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in your environment or "
+                f"in a `.env` file at the project root.\n\n"
+                f"_Your message was received:_ {body.prompt[:120]}"
+            )
 
         if billing:
             token_estimate = len(response_text.split()) * 4 // 3
@@ -811,7 +926,7 @@ def create_production_app(config: APIConfig | None = None) -> Any:
         return _ok(
             {
                 "response": response_text,
-                "model": body.model,
+                "model": model_used,
                 "tokens_used": len(response_text.split()) * 4 // 3,
             },
             req_id,
@@ -1427,6 +1542,205 @@ def create_production_app(config: APIConfig | None = None) -> Any:
         )
 
     # ==================================================================
+    # TERMINAL ENDPOINTS
+    # NOTE: Auth is skipped when jwt_secret is empty (local dev mode).
+    #       Set JWT_SECRET in production to restrict terminal access.
+    # ==================================================================
+
+    def _terminal_auth_ok(request: Request) -> bool:
+        """Return True if the request is authorized to use the terminal."""
+        if not config.jwt_secret:
+            return True  # dev mode: no secret configured
+        auth = request.headers.get("Authorization", "")
+        token = auth.removeprefix("Bearer ").strip()
+        if not token:
+            return False
+        try:
+            payload = _decode_jwt(token, config.jwt_secret, config.jwt_algorithm)
+            user = _USERS.get(payload.get("sub"), {})
+            return user.get("email", "").lower() == _OWNER_EMAIL.lower()
+        except Exception:
+            return False
+
+    @app.post(f"/{config.api_version}/terminal/run")
+    async def terminal_run(
+        body: TerminalRunRequest,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Execute a shell command and return stdout/stderr. Owner-only."""
+        import asyncio as _al
+        import sys as _sys
+        import time as _tm
+
+        req_id, started = _ctx(request)
+        if not _terminal_auth_ok(request):
+            return JSONResponse(
+                status_code=401,
+                content=_err("Terminal access requires authentication", req_id, started),
+            )
+
+        workdir = body.workdir or os.getcwd()
+        timeout_s = body.timeout / 1000
+
+        if _sys.platform == "win32":
+            cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", body.command]
+        else:
+            cmd = ["bash", "-c", body.command]
+
+        t0 = _tm.monotonic()
+        try:
+            proc = await _al.create_subprocess_exec(
+                *cmd,
+                stdout=_al.subprocess.PIPE,
+                stderr=_al.subprocess.PIPE,
+                cwd=workdir,
+            )
+            stdout, stderr = await _al.wait_for(proc.communicate(), timeout=timeout_s)
+            elapsed_ms = round((_tm.monotonic() - t0) * 1000)
+            return _ok(
+                {
+                    "exit_code": proc.returncode,
+                    "stdout": stdout.decode("utf-8", errors="replace")[:50000],
+                    "stderr": stderr.decode("utf-8", errors="replace")[:10000],
+                    "duration_ms": elapsed_ms,
+                    "command": body.command,
+                },
+                req_id,
+                started,
+            )
+        except _al.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return JSONResponse(
+                status_code=408,
+                content=_err(f"Command timed out after {body.timeout}ms", req_id, started),
+            )
+        except Exception as exc:
+            return JSONResponse(
+                status_code=500,
+                content=_err(str(exc), req_id, started),
+            )
+
+    @app.websocket(f"/{config.api_version}/terminal/ws")
+    async def terminal_ws(websocket: WebSocket) -> None:
+        """WebSocket interactive terminal. Maintains a persistent shell session."""
+        import asyncio as _al
+        import sys as _sys
+        import uuid as _uuid
+
+        await websocket.accept()
+
+        # Auth handshake — skipped in dev mode (no JWT_SECRET)
+        if config.jwt_secret:
+            try:
+                auth_frame = await websocket.receive_json()
+                token = auth_frame.get("token", "").removeprefix("Bearer ").strip()
+                payload = _decode_jwt(token, config.jwt_secret, config.jwt_algorithm)
+                ws_user = _USERS.get(payload.get("sub"), {})
+                if ws_user.get("email", "").lower() != _OWNER_EMAIL.lower():
+                    await websocket.send_json({"type": "error", "message": "Terminal access restricted"})
+                    await websocket.close(code=4403)
+                    return
+            except Exception:
+                await websocket.send_json({"type": "error", "message": "Auth failed"})
+                await websocket.close(code=4401)
+                return
+
+        # Start persistent shell process
+        cwd = os.getcwd()
+        if _sys.platform == "win32":
+            shell_argv = ["powershell", "-NoLogo", "-NoProfile", "-NonInteractive"]
+        else:
+            shell_argv = ["bash", "--norc", "--noprofile"]
+
+        try:
+            proc = await _al.create_subprocess_exec(
+                *shell_argv,
+                stdin=_al.subprocess.PIPE,
+                stdout=_al.subprocess.PIPE,
+                stderr=_al.subprocess.STDOUT,
+                cwd=cwd,
+            )
+        except Exception as exc:
+            await websocket.send_json({"type": "error", "message": f"Shell failed to start: {exc}"})
+            return
+
+        await websocket.send_json({
+            "type": "ready",
+            "cwd": cwd,
+            "shell": shell_argv[0],
+        })
+
+        _seq = 0
+
+        try:
+            while True:
+                # Check process is still alive
+                if proc.returncode is not None:
+                    await websocket.send_json({"type": "exit", "code": proc.returncode})
+                    break
+
+                data = await websocket.receive_json()
+                msg_type = data.get("type", "run")
+
+                if msg_type == "run":
+                    command = data.get("command", "").strip()
+                    if not command:
+                        continue
+
+                    _seq += 1
+                    seq = _seq
+                    sentinel = f"__ORCH_{seq}_{_uuid.uuid4().hex[:8]}__"
+
+                    # Write command + sentinel to shell stdin
+                    if _sys.platform == "win32":
+                        full = f"{command}\r\nWrite-Host '{sentinel}'\r\n"
+                    else:
+                        full = f"{command}\nprintf '%s\\n' '{sentinel}'\n"
+
+                    proc.stdin.write(full.encode("utf-8"))
+                    await proc.stdin.drain()
+
+                    # Stream output until sentinel
+                    while True:
+                        if proc.returncode is not None:
+                            await websocket.send_json({"type": "done", "seq": seq})
+                            break
+                        try:
+                            line = await _al.wait_for(proc.stdout.readline(), timeout=60.0)
+                        except _al.TimeoutError:
+                            await websocket.send_json({"type": "timeout", "seq": seq})
+                            break
+                        if not line:
+                            await websocket.send_json({"type": "done", "seq": seq})
+                            break
+                        text = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                        if sentinel in text:
+                            await websocket.send_json({"type": "done", "seq": seq})
+                            break
+                        await websocket.send_json({"type": "output", "line": text, "seq": seq})
+
+                elif msg_type == "ping":
+                    await websocket.send_json({"type": "pong"})
+
+        except WebSocketDisconnect:
+            logger.debug("Terminal WebSocket disconnected")
+        except Exception as exc:
+            logger.error("Terminal WS error: %s", exc)
+            try:
+                await websocket.send_json({"type": "error", "message": str(exc)})
+            except Exception:
+                pass
+        finally:
+            if proc.returncode is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+    # ==================================================================
     # Global error handler
     # ==================================================================
 
@@ -1442,6 +1756,40 @@ def create_production_app(config: APIConfig | None = None) -> Any:
                 "meta": {"request_id": req_id, "duration_ms": 0},
             },
         )
+
+    # ==================================================================
+    # GUI — serve orchestra-gui static files at /
+    # ==================================================================
+    import pathlib as _pathlib
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    # Resolve the gui directory relative to this file's location:
+    # orchestra/api/server.py → ../../gui/orchestra-gui
+    _server_file = _pathlib.Path(__file__).resolve()
+    _gui_dir = _server_file.parent.parent.parent / "gui" / "orchestra-gui"
+
+    if _gui_dir.is_dir():
+        # Catch-all: any unmatched path that looks like a browser navigation
+        # (no extension, or root) gets index.html for hash-based SPA routing.
+        @app.get("/", include_in_schema=False)
+        async def gui_root() -> FileResponse:
+            return FileResponse(str(_gui_dir / "index.html"))
+
+        @app.get("/gui", include_in_schema=False)
+        async def gui_redirect() -> FileResponse:
+            return FileResponse(str(_gui_dir / "index.html"))
+
+        # Mount all static assets under /static so they don't shadow API routes
+        app.mount("/static", StaticFiles(directory=str(_gui_dir)), name="gui-static")
+
+        # Rewrite the index so it loads assets from /static/…
+        # Instead, serve the GUI inline by mounting at root AFTER all API routes
+        # (FastAPI resolves routes before StaticFiles mounts)
+        app.mount("/", StaticFiles(directory=str(_gui_dir), html=True), name="gui")
+        logger.info("GUI mounted from %s", _gui_dir)
+    else:
+        logger.warning("GUI directory not found at %s — skipping static mount", _gui_dir)
 
     logger.info(
         "Horizon Orchestra API ready on %s:%d (docs=%s)",

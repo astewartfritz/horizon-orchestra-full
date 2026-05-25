@@ -1,8 +1,9 @@
 """Horizon Orchestra — End-to-End Embedding Pipeline.
 
 Orchestrates the full ingest → chunk → embed → store workflow, with
-support for both in-memory (VectorIndex) and PostgreSQL (PGVectorStore)
-backends.  Provides semantic search over ingested documents.
+support for in-memory (VectorIndex), PostgreSQL (PGVectorStore), Pinecone
+(PineconeStore), and Supabase (SupabaseVectorStore) backends.  Provides
+semantic search over ingested documents with optional embedding caching.
 """
 
 from __future__ import annotations
@@ -15,10 +16,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
+from .cache import EmbeddingCache
 from .chunker import Chunk, ChunkStrategy, TextChunker
 from .index import SearchResult as _IndexSearchResult, VectorIndex
 from .models import EMBEDDING_MODELS, EmbeddingClient, EmbeddingModel
 from .pgvector import PGVectorStore
+
+try:
+    from .pinecone import PineconeStore
+    _HAS_PINECONE = True
+except ImportError:
+    PineconeStore = None  # type: ignore[assignment]
+    _HAS_PINECONE = False
+
+try:
+    from .supabase import SupabaseVectorStore
+    _HAS_SUPABASE = True
+except ImportError:
+    SupabaseVectorStore = None  # type: ignore[assignment]
+    _HAS_SUPABASE = False
 
 __all__ = [
     "EmbeddingPipeline",
@@ -47,7 +63,7 @@ class PipelineConfig:
     chunk_overlap: int = 50
 
     # Vector store backend
-    store_backend: Literal["memory", "pgvector"] = "memory"
+    store_backend: Literal["memory", "pgvector", "pinecone", "supabase"] = "memory"
 
     # In-memory index options
     index_metric: str = "cosine"
@@ -57,6 +73,22 @@ class PipelineConfig:
     pgvector_dsn: str = ""
     pgvector_collection: str = "default"
     pgvector_dimensions: int | None = None  # auto-detected from model
+
+    # Pinecone options
+    pinecone_api_key: str = ""
+    pinecone_collection: str = "default"
+    pinecone_cloud: str = "aws"
+    pinecone_region: str = "us-west-2"
+    pinecone_metric: str = "cosine"
+
+    # Supabase options
+    supabase_url: str = ""
+    supabase_key: str = ""
+    supabase_collection: str = "default"
+
+    # Embedding cache options
+    embedding_cache_size: int = 10000
+    embedding_cache_path: str = ".embedding-cache.db"
 
     def __post_init__(self) -> None:
         if isinstance(self.chunk_strategy, str):
@@ -129,6 +161,9 @@ class EmbeddingPipeline:
         chunker: TextChunker | None = None,
         vector_index: VectorIndex | None = None,
         pgvector_store: PGVectorStore | None = None,
+        pinecone_store: Any = None,
+        supabase_store: Any = None,
+        embedding_cache: EmbeddingCache | None = None,
     ) -> None:
         self.config = config or PipelineConfig()
         self._embed_client = embed_client or EmbeddingClient()
@@ -150,6 +185,8 @@ class EmbeddingPipeline:
         self._store_backend = self.config.store_backend
         self._vector_index: VectorIndex | None = vector_index
         self._pgvector_store: PGVectorStore | None = pgvector_store
+        self._pinecone_store: Any = pinecone_store
+        self._supabase_store: Any = supabase_store
 
         if self._store_backend == "memory" and self._vector_index is None:
             self._vector_index = VectorIndex(
@@ -157,6 +194,17 @@ class EmbeddingPipeline:
                 metric=self.config.index_metric,
                 use_hnsw=self.config.index_use_hnsw,
             )
+
+        # Embedding cache (optional — reduces API calls)
+        self._cache = embedding_cache
+        if self._cache is None and self.config.embedding_cache_size > 0:
+            try:
+                self._cache = EmbeddingCache(
+                    max_size=self.config.embedding_cache_size,
+                    db_path=self.config.embedding_cache_path or None,
+                )
+            except Exception as exc:
+                log.warning("Failed to initialise embedding cache: %s", exc)
 
         # Bookkeeping
         self._total_documents: int = 0
@@ -169,7 +217,7 @@ class EmbeddingPipeline:
     # -- initialization -----------------------------------------------------
 
     async def initialize(self) -> None:
-        """Initialize the pipeline (connect to pgvector if needed)."""
+        """Initialize the pipeline (connect to backend store if needed)."""
         if self._store_backend == "pgvector":
             if self._pgvector_store is None:
                 self._pgvector_store = PGVectorStore()
@@ -189,6 +237,56 @@ class EmbeddingPipeline:
                 self.config.pgvector_collection,
                 self._dimensions,
             )
+
+        elif self._store_backend == "pinecone":
+            if not _HAS_PINECONE:
+                raise ImportError(
+                    "Pinecone SDK is required when store_backend='pinecone'. "
+                    "Install with: pip install pinecone"
+                )
+            if self._pinecone_store is None:
+                self._pinecone_store = PineconeStore(
+                    api_key=self.config.pinecone_api_key or None,
+                    default_metric=self.config.pinecone_metric,
+                    default_region=self.config.pinecone_region,
+                )
+            await self._pinecone_store.connect()
+            await self._pinecone_store.create_collection(
+                self.config.pinecone_collection,
+                dimensions=self._dimensions,
+                metric=self.config.pinecone_metric,
+                if_not_exists=True,
+            )
+            log.info(
+                "Initialized Pinecone index %r (%d dims)",
+                self.config.pinecone_collection,
+                self._dimensions,
+            )
+
+        elif self._store_backend == "supabase":
+            if not _HAS_SUPABASE:
+                raise ImportError(
+                    "Supabase SDK + asyncpg are required when "
+                    "store_backend='supabase'. Install with: "
+                    "pip install supabase asyncpg"
+                )
+            if self._supabase_store is None:
+                self._supabase_store = SupabaseVectorStore(
+                    supabase_url=self.config.supabase_url or None,
+                    supabase_key=self.config.supabase_key or None,
+                )
+            await self._supabase_store.connect()
+            await self._supabase_store.create_collection(
+                self.config.supabase_collection,
+                dimensions=self._dimensions,
+                if_not_exists=True,
+            )
+            log.info(
+                "Initialized Supabase collection %r (%d dims)",
+                self.config.supabase_collection,
+                self._dimensions,
+            )
+
         self._initialized = True
 
     def _ensure_initialized(self) -> None:
@@ -230,9 +328,29 @@ class EmbeddingPipeline:
             log.warning("No chunks produced from source=%s", source)
             return []
 
-        # 2. Embed
+        # 2. Embed (with optional cache)
         chunk_texts = [c.text for c in chunks]
-        vectors = await self._embed_client.batch_embed(chunk_texts, model=self.config.model)
+        cache = self._cache
+
+        # Try cache hit for all chunks
+        if cache is not None:
+            hits, miss_indices = cache.get_batch(chunk_texts, model=self.config.model)
+            if miss_indices:
+                miss_texts = [chunk_texts[i] for i in miss_indices]
+                miss_vectors = await self._embed_client.batch_embed(
+                    miss_texts, model=self.config.model,
+                )
+                cache.put_batch(miss_texts, miss_vectors, model=self.config.model)
+                # Rebuild full vectors list
+                vectors = [None] * len(chunk_texts)
+                for idx, vec in hits.items():
+                    vectors[idx] = vec
+                for idx, vec in zip(miss_indices, miss_vectors):
+                    vectors[idx] = vec
+            else:
+                vectors = [hits[i] for i in range(len(chunk_texts))]
+        else:
+            vectors = await self._embed_client.batch_embed(chunk_texts, model=self.config.model)
 
         # 3. Generate IDs and prepare metadata
         chunk_ids: list[str] = []
@@ -263,6 +381,20 @@ class EmbeddingPipeline:
         elif self._store_backend == "pgvector" and self._pgvector_store is not None:
             await self._pgvector_store.batch_insert(
                 self.config.pgvector_collection,
+                chunk_ids,
+                vectors,
+                chunk_metas,
+            )
+        elif self._store_backend == "pinecone" and self._pinecone_store is not None:
+            await self._pinecone_store.batch_insert(
+                self.config.pinecone_collection,
+                chunk_ids,
+                vectors,
+                chunk_metas,
+            )
+        elif self._store_backend == "supabase" and self._supabase_store is not None:
+            await self._supabase_store.batch_insert(
+                self.config.supabase_collection,
                 chunk_ids,
                 vectors,
                 chunk_metas,
@@ -410,6 +542,38 @@ class EmbeddingPipeline:
                 )
                 for r in raw_pg
             ]
+        elif self._store_backend == "pinecone" and self._pinecone_store is not None:
+            raw_pc = await self._pinecone_store.search(
+                self.config.pinecone_collection,
+                query_vector,
+                top_k=top_k,
+                filters=filters,
+            )
+            return [
+                SearchResult(
+                    id=r.id,
+                    score=r.score,
+                    text=self._chunk_texts.get(r.id, ""),
+                    metadata=r.metadata,
+                )
+                for r in raw_pc
+            ]
+        elif self._store_backend == "supabase" and self._supabase_store is not None:
+            raw_sb = await self._supabase_store.search(
+                self.config.supabase_collection,
+                query_vector,
+                top_k=top_k,
+                filters=filters,
+            )
+            return [
+                SearchResult(
+                    id=r.id,
+                    score=r.score,
+                    text=self._chunk_texts.get(r.id, ""),
+                    metadata=r.metadata,
+                )
+                for r in raw_sb
+            ]
         else:
             raise RuntimeError("No vector store available")
 
@@ -470,6 +634,20 @@ class EmbeddingPipeline:
             )
             for cid in chunk_ids:
                 self._chunk_texts.pop(cid, None)
+        elif self._store_backend == "pinecone" and self._pinecone_store is not None:
+            count = await self._pinecone_store.delete_by_metadata(
+                self.config.pinecone_collection,
+                {"source": source},
+            )
+            for cid in chunk_ids:
+                self._chunk_texts.pop(cid, None)
+        elif self._store_backend == "supabase" and self._supabase_store is not None:
+            count = await self._supabase_store.delete_by_metadata(
+                self.config.supabase_collection,
+                {"source": source},
+            )
+            for cid in chunk_ids:
+                self._chunk_texts.pop(cid, None)
         else:
             raise RuntimeError("No vector store available")
 
@@ -512,10 +690,45 @@ class EmbeddingPipeline:
         }
 
     async def close(self) -> None:
-        """Close underlying clients and connections."""
+        """Close underlying clients, connections, and cache."""
         await self._embed_client.close()
         if self._pgvector_store is not None:
             await self._pgvector_store.close()
+        if self._pinecone_store is not None:
+            await self._pinecone_store.close()
+        if self._supabase_store is not None:
+            await self._supabase_store.close()
+        if self._cache is not None:
+            self._cache.close()
+
+    async def health_check(self) -> dict[str, Any]:
+        """Check health of the configured backend store.
+
+        Returns
+        -------
+        dict with keys: status, backend, latency_ms, error (if unhealthy).
+        """
+        if self._store_backend == "memory":
+            return {"status": "healthy", "backend": "memory", "latency_ms": 0.0}
+
+        store: Any = None
+        if self._store_backend == "pgvector":
+            store = self._pgvector_store
+        elif self._store_backend == "pinecone":
+            store = self._pinecone_store
+        elif self._store_backend == "supabase":
+            store = self._supabase_store
+
+        if store is None or not hasattr(store, "health_check"):
+            return {"status": "unknown", "backend": self._store_backend, "latency_ms": 0.0}
+
+        return await store.health_check()
+
+    def cache_stats(self) -> dict[str, Any]:
+        """Return embedding cache statistics (or empty dict if disabled)."""
+        if self._cache is None:
+            return {"enabled": False}
+        return {"enabled": True, **self._cache.stats()}
 
     def __repr__(self) -> str:
         return (

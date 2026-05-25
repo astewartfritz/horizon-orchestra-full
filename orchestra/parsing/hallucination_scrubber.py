@@ -260,7 +260,7 @@ class HallucinationScrubber:
         if len(percentages) >= 3:
             values = [p[0] for p in percentages]
             total = sum(values)
-            if 95 < total < 105 and abs(total - 100) > 2:
+            if abs(total - 100) > 5:
                 findings.append(InconsistencyFound(
                     description=f"Percentages sum to {total}% (expected ~100%)",
                     values=[f"{v}%" for v in values],

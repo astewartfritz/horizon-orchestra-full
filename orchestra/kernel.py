@@ -431,8 +431,8 @@ class AgentKernel:
             risks = data.get("risks", [])
             if risks:
                 log.info("[KERNEL] Lookahead risks: %s", risks[:2])
-        except Exception:
-                        import logging as _log; _log.getLogger('kernel').debug('Suppressed exception', exc_info=True)
+        except Exception as exc:
+            log.warning("[KERNEL] Lookahead failed: %s — proceeding without preemptive actions", exc)
 
     # -- replanning ---------------------------------------------------------
 
