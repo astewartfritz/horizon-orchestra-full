@@ -35,7 +35,7 @@ class ClinicalBrief:
     common_adverse_effects: List[str]
     patient_education_points: List[str]
     references: List[str]
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()

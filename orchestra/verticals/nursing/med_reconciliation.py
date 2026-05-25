@@ -49,7 +49,7 @@ class SafetyCheck:
     alerts: List[str]
     recommendations: List[str]
     risk_level: str  # "safe", "caution", "hold", "critical"
-    checked_at: datetime = field(default_factory=datetime.utcnow)
+    checked_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -112,7 +112,7 @@ class ReconciliationReport:
     intentional_changes: List[dict]
     unresolved_discrepancies: List[dict]
     review_required: bool
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()

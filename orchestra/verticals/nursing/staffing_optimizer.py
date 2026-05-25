@@ -41,7 +41,7 @@ class AcuityScore:
     care_hours_required_per_shift: float
     primary_drivers: List[str]
     nursing_tasks_estimated: int
-    assessed_at: datetime = field(default_factory=datetime.utcnow)
+    assessed_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -93,7 +93,7 @@ class WeeklySchedule:
     total_rn_hours: int
     estimated_compliance_score: float
     cost_estimate: float
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()

@@ -59,7 +59,7 @@ class NursingNote:
     note_type: NoteType
     content: str
     fhir_bundle: Optional[dict] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
     shift: str = ""
     unit: str = ""
     word_count: int = 0
@@ -115,7 +115,7 @@ class SOAPNote:
     plan: str
     patient_id: str
     nurse_id: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     def to_dict(self) -> dict:
         return {
