@@ -44,19 +44,14 @@ log = logging.getLogger("orchestra.context_engine")
 
 
 # ---------------------------------------------------------------------------
-# Token estimation helper
+# Token counting — use TextChunker's tiktoken-backed counter throughout
 # ---------------------------------------------------------------------------
 
-def _estimate_tokens(text: str) -> int:
-    """Estimate token count using a simple len/4 heuristic.
-
-    Args:
-        text: Input text.
-
-    Returns:
-        Approximate token count.
-    """
-    return max(1, len(text) // 4)
+try:
+    from orchestra.embeddings.chunker import count_tokens as _estimate_tokens
+except Exception:  # chunker not yet importable (circular or missing dep)
+    def _estimate_tokens(text: str) -> int:  # type: ignore[misc]
+        return max(1, len(text) // 4)
 
 
 # ---------------------------------------------------------------------------
@@ -336,15 +331,17 @@ class _Chunk:
 class RAGContextPlugin(ContextPlugin):
     """Embedding-based retrieval-augmented context plugin.
 
-    Ingested documents are split into chunks, embedded, and stored
-    in memory. At assembly time, the most semantically similar chunks
-    are retrieved and assembled into context.
+    Ingested documents are split into chunks using Orchestra's TextChunker
+    (token-aware, recursive by default), embedded, and stored in memory.
+    At assembly time the most semantically similar chunks are retrieved.
 
     Args:
         router: ModelRouter for embedding and summarisation calls.
         model: Chat model for summarisation/compaction.
         embedding_model: Model name for embeddings.
-        chunk_size: Approximate chunk size in characters.
+        chunk_size: Max tokens per chunk (was previously characters — now tokens).
+        chunk_overlap: Token overlap between adjacent chunks.
+        chunk_strategy: TextChunker strategy (recursive, sentence, paragraph…).
         top_k: Number of chunks to retrieve per query.
     """
 
@@ -353,39 +350,66 @@ class RAGContextPlugin(ContextPlugin):
         router: Any | None = None,
         model: str = "kimi-k2.5",
         embedding_model: str = "text-embedding-3-small",
-        chunk_size: int = 1000,
+        chunk_size: int = 512,
+        chunk_overlap: int = 64,
+        chunk_strategy: str = "recursive",
         top_k: int = 5,
     ) -> None:
         self.router = router
         self.model = model
         self.embedding_model = embedding_model
         self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.chunk_strategy = chunk_strategy
         self.top_k = top_k
         self._chunks: list[_Chunk] = []
         self._turns: list[dict[str, Any]] = []
         self._summary: str = ""
 
+        try:
+            from orchestra.embeddings.chunker import TextChunker
+            self._chunker: Any = TextChunker(
+                default_chunk_size=chunk_size,
+                default_overlap=chunk_overlap,
+                default_strategy=chunk_strategy,
+                min_chunk_size=20,
+            )
+        except Exception:
+            self._chunker = None
+
     async def bootstrap(self, config: dict[str, Any]) -> None:
         """Initialise from config dict."""
-        for key in ("router", "model", "embedding_model", "chunk_size", "top_k"):
+        changed = False
+        for key in ("router", "model", "embedding_model", "chunk_size",
+                    "chunk_overlap", "chunk_strategy", "top_k"):
             if key in config:
                 setattr(self, key, config[key])
+                changed = True
+        if changed and self._chunker is not None:
+            try:
+                from orchestra.embeddings.chunker import TextChunker
+                self._chunker = TextChunker(
+                    default_chunk_size=self.chunk_size,
+                    default_overlap=self.chunk_overlap,
+                    default_strategy=self.chunk_strategy,
+                    min_chunk_size=20,
+                )
+            except Exception:
+                pass
         log.debug("RAGContextPlugin bootstrapped")
 
     async def ingest(self, content: str, source: str) -> None:
-        """Split *content* into chunks and embed each.
+        """Split *content* into chunks via TextChunker and embed each."""
+        if self._chunker is not None:
+            raw_chunks = [c.text for c in self._chunker.chunk(content)]
+        else:
+            # Fallback: paragraph split, token-aware size
+            raw_chunks = self._split_fallback(content, self.chunk_size)
 
-        Args:
-            content: Document text to ingest.
-            source: Document identifier (path, URL, label).
-        """
-        chunks = self._split(content, self.chunk_size)
-        log.debug("Ingesting %d chunks from %r", len(chunks), source)
-
-        for chunk_text in chunks:
+        log.debug("Ingesting %d chunks from %r", len(raw_chunks), source)
+        for chunk_text in raw_chunks:
             embedding = await self._embed(chunk_text)
-            chunk = _Chunk(source=source, text=chunk_text, embedding=embedding)
-            self._chunks.append(chunk)
+            self._chunks.append(_Chunk(source=source, text=chunk_text, embedding=embedding))
 
     async def assemble(self, query: str, max_tokens: int) -> str:
         """Retrieve the most relevant chunks for *query*.
@@ -574,41 +598,55 @@ class RAGContextPlugin(ContextPlugin):
         return dot / (norm_a * norm_b)
 
     @staticmethod
-    def _split(text: str, chunk_size: int) -> list[str]:
-        """Split *text* into overlapping chunks.
+    def _split_fallback(text: str, chunk_size: int) -> list[str]:
+        """Paragraph-aware split used only when TextChunker is unavailable.
 
-        Splits on paragraph boundaries when possible, falling back to
-        character boundaries. 20% overlap between consecutive chunks.
-
-        Args:
-            text: Input text to split.
-            chunk_size: Target characters per chunk.
-
-        Returns:
-            List of text chunks.
+        Uses *token* counts (via _estimate_tokens) rather than character
+        counts, and carries a 12% overlap between consecutive chunks.
         """
         paragraphs = text.split("\n\n")
         chunks: list[str] = []
         current = ""
+        overlap_tokens = max(1, int(chunk_size * 0.12))
 
         for para in paragraphs:
-            if len(current) + len(para) + 2 <= chunk_size:
-                current = (current + "\n\n" + para).strip()
+            candidate = (current + "\n\n" + para).strip() if current else para
+            if _estimate_tokens(candidate) <= chunk_size:
+                current = candidate
             else:
                 if current:
                     chunks.append(current)
-                if len(para) > chunk_size:
-                    # Hard split the paragraph
-                    step = int(chunk_size * 0.8)
-                    for i in range(0, len(para), step):
-                        chunks.append(para[i : i + chunk_size])
-                    current = ""
+                if _estimate_tokens(para) > chunk_size:
+                    # Token-aware stride split
+                    words = para.split()
+                    buf: list[str] = []
+                    buf_tok = 0
+                    for w in words:
+                        wt = _estimate_tokens(w)
+                        if buf_tok + wt > chunk_size and buf:
+                            chunks.append(" ".join(buf))
+                            # carry overlap words
+                            keep: list[str] = []
+                            keep_tok = 0
+                            for bw in reversed(buf):
+                                bt = _estimate_tokens(bw)
+                                if keep_tok + bt > overlap_tokens:
+                                    break
+                                keep.insert(0, bw)
+                                keep_tok += bt
+                            buf = keep
+                            buf_tok = keep_tok
+                        buf.append(w)
+                        buf_tok += wt
+                    if buf:
+                        current = " ".join(buf)
+                    else:
+                        current = ""
                 else:
                     current = para
 
         if current:
             chunks.append(current)
-
         return chunks
 
 
