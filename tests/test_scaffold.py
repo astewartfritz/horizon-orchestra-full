@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from code_agent.scaffold.context import LanguageDetector, LANGUAGE_CONTEXTS
-from code_agent.scaffold.generator import TEMPLATES, ScaffoldGenerator
+from orchestra.code_agent.scaffold.context import LanguageDetector, LANGUAGE_CONTEXTS
+from orchestra.code_agent.scaffold.generator import TEMPLATES, ScaffoldGenerator
 
 
 class TestLanguageDetector:

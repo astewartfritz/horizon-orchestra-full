@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from code_agent.scheduler import (
+from orchestra.code_agent.scheduler import (
     CronExpr,
     RetryPolicy,
     ScheduledTask,

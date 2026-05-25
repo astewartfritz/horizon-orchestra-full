@@ -1,11 +1,11 @@
 import pytest
 import asyncio
 
-from code_agent.agentmesh import (
+from orchestra.code_agent.agentmesh import (
     AgentRegistry, AgentInfo, AgentType, AgentStatus,
     AgentNode, MeshNetwork,
 )
-from code_agent.teams import (
+from orchestra.code_agent.teams import (
     TeamFactory, TeamFormationResult, TeamFormationStrategy,
     BestFitStrategy, LoadBalancedStrategy, MinimumTeamStrategy,
     AgentTeam, TeamLeader, TeamResult, TeamStatus,

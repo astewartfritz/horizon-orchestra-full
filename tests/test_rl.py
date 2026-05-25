@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from code_agent.council.council import CouncilVerdict
-from code_agent.council.scorer import QualityGateResult
-from code_agent.rl.signal import TrainingSignal
-from code_agent.rl.buffer import ExperienceBuffer
-from code_agent.rl.policy import RoutingPolicy
-from code_agent.rl.trainer import OrchestraTrainer, TrainingReport
-from code_agent.rl.loop import FeedbackLoop
+from orchestra.code_agent.council.council import CouncilVerdict
+from orchestra.code_agent.council.scorer import QualityGateResult
+from orchestra.code_agent.rl.signal import TrainingSignal
+from orchestra.code_agent.rl.buffer import ExperienceBuffer
+from orchestra.code_agent.rl.policy import RoutingPolicy
+from orchestra.code_agent.rl.trainer import OrchestraTrainer, TrainingReport
+from orchestra.code_agent.rl.loop import FeedbackLoop
 
 
 # ---------------------------------------------------------------------------
@@ -282,10 +282,10 @@ class TestOrchestraTrainer:
 # ---------------------------------------------------------------------------
 
 def _make_dispatch_record(task="write sort", agent="claude_code", output="def sort(): pass", success=True):
-    from code_agent.nemotron.dispatch import DispatchRecord
-    from code_agent.nemotron.router import RoutingDecision
-    from code_agent.nemotron.classifier import ClassificationResult
-    from code_agent.active_agents.base import AgentResult
+    from orchestra.code_agent.nemotron.dispatch import DispatchRecord
+    from orchestra.code_agent.nemotron.router import RoutingDecision
+    from orchestra.code_agent.nemotron.classifier import ClassificationResult
+    from orchestra.code_agent.active_agents.base import AgentResult
 
     return DispatchRecord(
         task=task,
@@ -316,7 +316,7 @@ class TestFeedbackLoop:
         mock_council = MagicMock()
         mock_council.evaluate = AsyncMock(return_value=verdict)
 
-        from code_agent.council.scorer import QualityGate
+        from orchestra.code_agent.council.scorer import QualityGate
         gate = QualityGate(pass_threshold=6.0)
 
         return FeedbackLoop(

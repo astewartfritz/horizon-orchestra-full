@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from code_agent.reasoning.routes import register_reasoning_routes
+from orchestra.code_agent.reasoning.routes import register_reasoning_routes
 
 
 @pytest.fixture

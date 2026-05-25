@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from code_agent.dashboard.metrics import (
+from orchestra.code_agent.dashboard.metrics import (
     DashboardMetrics,
     _estimate_tokens,
     _lookup_cost,
@@ -197,7 +197,7 @@ class TestDashboardMetrics:
             m.tick()
         snap = m.snapshot()
         # History should be capped at _HISTORY_LEN
-        from code_agent.dashboard.metrics import _HISTORY_LEN
+        from orchestra.code_agent.dashboard.metrics import _HISTORY_LEN
         assert len(snap["council_latency"]["history"]) <= _HISTORY_LEN
 
     def test_multiple_models_cost_separate(self):
@@ -228,11 +228,11 @@ class TestDashboardMetrics:
 
 class TestDashboardRoutes:
     def test_html_contains_chart_js(self):
-        from code_agent.dashboard.routes import _DASHBOARD_HTML
+        from orchestra.code_agent.dashboard.routes import _DASHBOARD_HTML
         assert "chart.js" in _DASHBOARD_HTML.lower()
 
     def test_html_has_four_panels(self):
-        from code_agent.dashboard.routes import _DASHBOARD_HTML
+        from orchestra.code_agent.dashboard.routes import _DASHBOARD_HTML
         panels = ["token-spend", "accept", "latency", "compute"]
         # Check key element IDs exist
         assert "chart-spend" in _DASHBOARD_HTML
@@ -241,16 +241,16 @@ class TestDashboardRoutes:
         assert "chart-compute" in _DASHBOARD_HTML
 
     def test_html_has_sse_connection(self):
-        from code_agent.dashboard.routes import _DASHBOARD_HTML
+        from orchestra.code_agent.dashboard.routes import _DASHBOARD_HTML
         assert "EventSource" in _DASHBOARD_HTML
         assert "/dashboard/stream" in _DASHBOARD_HTML
 
     def test_html_has_live_indicator(self):
-        from code_agent.dashboard.routes import _DASHBOARD_HTML
+        from orchestra.code_agent.dashboard.routes import _DASHBOARD_HTML
         assert "live-dot" in _DASHBOARD_HTML or "live-badge" in _DASHBOARD_HTML
 
     def test_html_has_all_metric_elements(self):
-        from code_agent.dashboard.routes import _DASHBOARD_HTML
+        from orchestra.code_agent.dashboard.routes import _DASHBOARD_HTML
         required_ids = [
             "spend-total", "spend-rate", "spend-tokens",
             "accept-pct", "accept-counts",

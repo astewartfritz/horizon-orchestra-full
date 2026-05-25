@@ -1,10 +1,10 @@
 import pytest
 import asyncio
 
-from code_agent.channels.health import ChannelHealthMonitor, ChannelHealth, ChannelHealthStatus
-from code_agent.channels.formatter import OutputFormatter
-from code_agent.channels.retry import ChannelRetryEngine, RetryConfig, RetryStrategy
-from code_agent.channels.queue import MessageQueue, QueuedMessage, MessagePriority
+from orchestra.code_agent.channels.health import ChannelHealthMonitor, ChannelHealth, ChannelHealthStatus
+from orchestra.code_agent.channels.formatter import OutputFormatter
+from orchestra.code_agent.channels.retry import ChannelRetryEngine, RetryConfig, RetryStrategy
+from orchestra.code_agent.channels.queue import MessageQueue, QueuedMessage, MessagePriority
 
 
 class TestChannelHealthMonitor:

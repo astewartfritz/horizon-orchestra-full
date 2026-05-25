@@ -2,8 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from code_agent.telemetry.routes import register_telemetry_routes
-from code_agent.telemetry.tracer import AgentTracer
+from orchestra.code_agent.telemetry.routes import register_telemetry_routes
+from orchestra.code_agent.telemetry.tracer import AgentTracer
 
 
 @pytest.fixture(autouse=True)

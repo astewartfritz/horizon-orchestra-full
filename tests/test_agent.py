@@ -2,9 +2,9 @@ import asyncio
 
 import pytest
 
-from code_agent import Agent, AgentConfig
-from code_agent.config import LLMConfig
-from code_agent.tools.base import Tool, ToolResult, ToolSpec
+from orchestra.code_agent import Agent, AgentConfig
+from orchestra.code_agent.config import LLMConfig
+from orchestra.code_agent.tools.base import Tool, ToolResult, ToolSpec
 
 
 class EchoTool(Tool):
@@ -32,7 +32,7 @@ async def test_agent_initialization():
 
 def test_tool_specs():
     """Test that tool specs have required fields."""
-    from code_agent.tools import CORE_TOOLS
+    from orchestra.code_agent.tools import CORE_TOOLS
     for t_cls in CORE_TOOLS:
         spec = t_cls.spec
         assert spec.name, f"Tool {t_cls} has no name"
@@ -58,26 +58,26 @@ async def test_tool_result_bool():
 
 class TestGuardrails:
     def test_blocks_destructive_commands(self):
-        from code_agent.guardrails.policy import Guardrails
+        from orchestra.code_agent.guardrails.policy import Guardrails
         g = Guardrails()
         results = g.check_tool_call("bash", {"command": "rm -rf /src"})
         assert g.has_blocks(results)
 
     def test_allows_safe_commands(self):
-        from code_agent.guardrails.policy import Guardrails
+        from orchestra.code_agent.guardrails.policy import Guardrails
         g = Guardrails()
         results = g.check_tool_call("bash", {"command": "ls -la"})
         assert not g.has_blocks(results)
 
     def test_warns_on_secrets(self):
-        from code_agent.guardrails.policy import Guardrails
+        from orchestra.code_agent.guardrails.policy import Guardrails
         g = Guardrails()
         results = g.check_tool_call("write", {"file_path": "config.py", "content": "api_key = 123"})
         warnings = [r for r in results if r.severity == "warning" and not r.passed]
         assert len(warnings) > 0
 
     def test_blocks_force_push(self):
-        from code_agent.guardrails.policy import Guardrails
+        from orchestra.code_agent.guardrails.policy import Guardrails
         g = Guardrails()
         results = g.check_tool_call("bash", {"git_action": "push", "args": "--force main"})
         assert g.has_blocks(results)

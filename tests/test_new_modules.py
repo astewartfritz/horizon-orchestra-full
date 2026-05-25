@@ -3,14 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from code_agent.vector.engine import VectorEngine, simple_hash_embedding
-from code_agent.vector.indexer import IndexerTool
-from code_agent.analysis.parser import CodeAnalyzer
-from code_agent.cost.tracker import CostTracker, TokenUsage
-from code_agent.watcher.monitor import FileWatcher
-from code_agent.watcher.tool import WatchTool
-from code_agent.output.testgen import TestGenerator
-from code_agent.plugins.loader import PluginLoader
+from orchestra.code_agent.vector.engine import VectorEngine, simple_hash_embedding
+from orchestra.code_agent.vector.indexer import IndexerTool
+from orchestra.code_agent.analysis.parser import CodeAnalyzer
+from orchestra.code_agent.cost.tracker import CostTracker, TokenUsage
+from orchestra.code_agent.watcher.monitor import FileWatcher
+from orchestra.code_agent.watcher.tool import WatchTool
+from orchestra.code_agent.output.testgen import TestGenerator
+from orchestra.code_agent.plugins.loader import PluginLoader
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ class Calculator:
 
 @pytest.mark.asyncio
 async def test_analyze_tool():
-    from code_agent.analysis.tool import AnalyzeTool
+    from orchestra.code_agent.analysis.tool import AnalyzeTool
 
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "mod.py"
@@ -152,7 +152,7 @@ class Counter:
 
 @pytest.mark.asyncio
 async def test_scaffold_tool():
-    from code_agent.scaffold.generator import ScaffoldGenerator
+    from orchestra.code_agent.scaffold.generator import ScaffoldGenerator
     with tempfile.TemporaryDirectory() as tmp:
         tool = ScaffoldGenerator()
         result = await tool(template="python-script", name="hello", output_dir=str(Path(tmp) / "hello"))
@@ -162,10 +162,10 @@ async def test_scaffold_tool():
 
 
 def test_plugin_loader():
-    from code_agent.tools import CORE_TOOLS
+    from orchestra.code_agent.tools import CORE_TOOLS
     assert len(CORE_TOOLS) >= 15
 
 
 def test_tui_import():
-    from code_agent.tui import CodeAgentTUI, run_tui
+    from orchestra.code_agent.tui import CodeAgentTUI, run_tui
     assert CodeAgentTUI.__name__ == "CodeAgentTUI"

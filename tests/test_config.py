@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from code_agent.config import AgentConfig, LLMConfig
+from orchestra.code_agent.config import AgentConfig, LLMConfig
 
 
 def test_default_config():

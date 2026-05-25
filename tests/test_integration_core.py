@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 import unittest
 
 # Set test env vars before importing settings
@@ -57,16 +58,17 @@ class TestHealth:
 
 class TestAuth:
     def test_register_and_login(self, client):
-        email = "test_integ@orchestra.test"
+        ts = int(time.time())
+        email = f"test_integ_{ts}@orchestra.test"
         password = "TestPass123!"
 
-        # Register
-        r = client.post("/v1/auth/register", json={"email": email, "password": password, "name": "Test"})
-        assert r.status_code in (200, 201, 409), f"Register returned {r.status_code}: {r.text}"
-
-        if r.status_code == 409:
-            # Already exists — that's fine, proceed to login
-            pass
+        # Register as owner to auto-approve
+        os.environ["ORCHESTRA_OWNER_EMAIL"] = email
+        try:
+            r = client.post("/v1/auth/register", json={"email": email, "password": password, "name": "Test"})
+            assert r.status_code in (200, 201), f"Register returned {r.status_code}: {r.text}"
+        finally:
+            os.environ.pop("ORCHESTRA_OWNER_EMAIL", None)
 
         # Login — response envelope: {"data": {"access_token": "..."}, "error": null, ...}
         r = client.post("/v1/auth/login", json={"email": email, "password": password})

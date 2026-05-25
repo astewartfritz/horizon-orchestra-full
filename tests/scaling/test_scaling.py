@@ -6,11 +6,11 @@ import time
 
 import pytest
 
-from code_agent.scaling.circuit_breaker import CircuitBreaker, CircuitBreakerRegistry, CircuitState
-from code_agent.scaling.scaling_manager import ScalingManager, ScalingConfig, ScalingAction
-from code_agent.scaling.edge_adapter import EdgeAdapter, EdgeMode
-from code_agent.scaling.task_queue import DistributedTaskQueue, QueuePriority, QueueTask
-from code_agent.scaling.worker import Worker, WorkerPool
+from orchestra.code_agent.scaling.circuit_breaker import CircuitBreaker, CircuitBreakerRegistry, CircuitState
+from orchestra.code_agent.scaling.scaling_manager import ScalingManager, ScalingConfig, ScalingAction
+from orchestra.code_agent.scaling.edge_adapter import EdgeAdapter, EdgeMode
+from orchestra.code_agent.scaling.task_queue import DistributedTaskQueue, QueuePriority, QueueTask
+from orchestra.code_agent.scaling.worker import Worker, WorkerPool
 
 
 # ── Circuit Breaker ──

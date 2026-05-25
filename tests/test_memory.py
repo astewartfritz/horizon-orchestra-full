@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from code_agent.memory.base import NullMemory, JSONMemory, SQLiteMemory, MemoryEntry
+from orchestra.code_agent.memory.base import NullMemory, JSONMemory, SQLiteMemory, MemoryEntry
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from code_agent.monitor import (
+from orchestra.code_agent.monitor import (
     AlertCondition,
     AlertEvent,
     AlertManager,

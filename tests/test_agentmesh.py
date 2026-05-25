@@ -2,7 +2,7 @@ import pytest
 import time
 import asyncio
 
-from code_agent.agentmesh import (
+from orchestra.code_agent.agentmesh import (
     AgentRegistry, AgentInfo, AgentType, AgentStatus,
     AgentNode, MeshNetwork, MeshRouter, MeshMessage, MessageType,
 )

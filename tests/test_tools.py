@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from code_agent.tools.file_ops import ReadTool, WriteTool, EditTool, GlobTool
-from code_agent.tools.search import GrepTool
-from code_agent.tools.base import ToolResult
+from orchestra.code_agent.tools.file_ops import ReadTool, WriteTool, EditTool, GlobTool
+from orchestra.code_agent.tools.search import GrepTool
+from orchestra.code_agent.tools.base import ToolResult
 
 
 @pytest.mark.asyncio

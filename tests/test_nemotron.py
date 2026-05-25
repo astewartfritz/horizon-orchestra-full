@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from code_agent.active_agents.base import AgentHealthStatus, AgentResult, AgentStatus
-from code_agent.active_agents.registry import ActiveAgentRegistry
-from code_agent.nemotron.classifier import ClassificationResult, NemotronClassifier
-from code_agent.nemotron.dispatch import NemotronDispatch
-from code_agent.nemotron.router import NemotronRouter, RoutingDecision
+from orchestra.code_agent.active_agents.base import AgentHealthStatus, AgentResult, AgentStatus
+from orchestra.code_agent.active_agents.registry import ActiveAgentRegistry
+from orchestra.code_agent.nemotron.classifier import ClassificationResult, NemotronClassifier
+from orchestra.code_agent.nemotron.dispatch import NemotronDispatch
+from orchestra.code_agent.nemotron.router import NemotronRouter, RoutingDecision
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@ def _make_agent_dict(name: str, priority: int = 50, caps: list[str] | None = Non
 
 
 def _make_registry_with_agents(*names: str) -> ActiveAgentRegistry:
-    from code_agent.active_agents.base import AgentCapability
+    from orchestra.code_agent.active_agents.base import AgentCapability
 
     class _StubAgent:
         def __init__(self, n, priority=50):

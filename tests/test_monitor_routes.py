@@ -2,14 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from code_agent.monitor.routes import register_monitor_routes
-from code_agent.monitor.collector import MetricsCollector
-from code_agent.monitor.alerts import AlertManager
+from orchestra.code_agent.monitor.routes import register_monitor_routes
+from orchestra.code_agent.monitor.collector import MetricsCollector
+from orchestra.code_agent.monitor.alerts import AlertManager
 
 
 @pytest.fixture
 def app(tmp_path):
-    import code_agent.monitor.routes as r
+    import orchestra.code_agent.monitor.routes as r
     db = str(tmp_path / "test.db")
     r._collector = MetricsCollector(db_path=db)
     r._alert_mgr = AlertManager(db_path=db)

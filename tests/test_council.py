@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from code_agent.council.judge import JudgeScore, LLMJudge, DIMENSIONS
-from code_agent.council.council import CouncilVerdict, ModelCouncil
-from code_agent.council.scorer import (
+from orchestra.code_agent.council.judge import JudgeScore, LLMJudge, DIMENSIONS
+from orchestra.code_agent.council.council import CouncilVerdict, ModelCouncil
+from orchestra.code_agent.council.scorer import (
     QualityGate, QualityGateResult, categorise_task, _CATEGORY_KEYWORDS,
 )
 
