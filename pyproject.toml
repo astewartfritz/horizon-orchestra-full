@@ -23,6 +23,10 @@ classifiers = [
 dependencies = [
     "openai>=1.60.0",
     "httpx>=0.27.0",
+    "click>=8.1.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +42,16 @@ speech = [
 yaml = ["pyyaml>=6.0"]
 redis = ["redis>=5.0.0"]
 server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.34.0"]
+langchain = ["langchain-core>=0.2.0"]
+channels = [
+    # Slack (polling via Web API — no SDK required, just httpx which is a core dep)
+    # WhatsApp / Instagram (Meta Graph API — httpx only)
+    # Telegram (Bot API — httpx only)
+    # Gmail (Google API client)
+    "google-auth>=2.28.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.120.0",
+]
 all = [
     "google-genai>=1.0.0",
     "anthropic>=0.40.0",
@@ -48,14 +62,23 @@ all = [
     "redis>=5.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
+    "langchain-core>=0.2.0",
+    "google-auth>=2.28.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.120.0",
 ]
 
 [project.scripts]
 orchestra = "orchestra.cli:main"
+horizon = "orchestra.cli:main"
 
 [project.urls]
 Repository = "https://github.com/astewartfritz/horizon-orchestra"
 Documentation = "https://github.com/astewartfritz/horizon-orchestra/blob/main/ORCHESTRA.md"
+
+[tool.pytest.ini_options]
+markers = ["integration: mark a test as an integration test (spawns server subprocess)"]
+asyncio_mode = "auto"
 
 [tool.setuptools.packages.find]
 where = ["."]

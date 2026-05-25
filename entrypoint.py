@@ -29,7 +29,7 @@ def main():
     port = int(os.environ["ORCHESTRA_PORT"])
     log_level = os.environ["ORCHESTRA_LOG_LEVEL"]
 
-    from code_agent.config import AgentConfig, LLMConfig
+    from orchestra.code_agent.config import AgentConfig, LLMConfig
     cfg = AgentConfig(
         llm=LLMConfig(
             provider=os.environ["ORCHESTRA_PROVIDER"],
@@ -39,7 +39,7 @@ def main():
         ),
         workspace=os.environ["ORCHESTRA_WORKSPACE"],
     )
-    from code_agent.ui.server import create_ui_app
+    from orchestra.code_agent.ui.server import create_ui_app
     app = create_ui_app(cfg)
 
     logger.info("Starting provider=%s model=%s on %s:%s", cfg.llm.provider, cfg.llm.model, host, port)

@@ -6,7 +6,7 @@ Usage:
 
 Then open http://localhost:8000/docs for the interactive API docs.
 """
-from code_agent.api.server import AgentAPI
+from orchestra.code_agent.api.server import AgentAPI
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000):

@@ -7,8 +7,8 @@ Usage:
 import asyncio
 import os
 
-from code_agent import Agent, AgentConfig
-from code_agent.config import LLMConfig
+from orchestra.code_agent import Agent, AgentConfig
+from orchestra.code_agent.config import LLMConfig
 
 
 async def main():

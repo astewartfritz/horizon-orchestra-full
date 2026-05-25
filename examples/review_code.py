@@ -2,8 +2,8 @@
 import asyncio
 import os
 
-from code_agent.config import LLMConfig
-from code_agent.reviewer import CodeReviewer
+from orchestra.code_agent.config import LLMConfig
+from orchestra.code_agent.reviewer import CodeReviewer
 
 
 SAMPLE_CODE = """

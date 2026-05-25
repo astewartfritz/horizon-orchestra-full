@@ -3,8 +3,8 @@ import asyncio
 import os
 from datetime import datetime
 
-from code_agent import Agent, AgentConfig, Tool, ToolResult, ToolSpec
-from code_agent.config import LLMConfig
+from orchestra.code_agent import Agent, AgentConfig, Tool, ToolResult, ToolSpec
+from orchestra.code_agent.config import LLMConfig
 
 
 class TimestampTool(Tool):
