@@ -233,6 +233,7 @@ class AgentConfig:
         "Use tools iteratively until the task is fully complete. "
         "When finished, respond with your final answer."
     )
+    enable_structured_thinking: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +253,42 @@ class AgentLoop:
         self.tools = tools
         self.config = config or AgentConfig()
 
+    async def _structured_think(self, task: str, client: Any, model_id: str) -> str:
+        """Make one focused reasoning pass before acting.
+
+        Returns a formatted string: understand / approach / risks.
+        Falls back to empty string on any failure so the main loop is unaffected.
+        """
+        prompt = (
+            "Before acting, reason briefly about this task. "
+            "Reply with ONLY valid JSON — no markdown, no prose — in this exact shape:\n"
+            '{"understand": "one sentence: what is actually being asked", '
+            '"approach": "one sentence: how you will tackle it", '
+            '"risks": "one sentence: what could go wrong"}\n\n'
+            f"Task: {task}"
+        )
+        try:
+            resp = await client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=256,
+                temperature=0.3,
+            )
+            raw = (resp.choices[0].message.content or "").strip()
+            # strip markdown fences if the model wraps it anyway
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            data = json.loads(raw)
+            return (
+                f"Understand: {data.get('understand', '')}\n"
+                f"Approach:   {data.get('approach', '')}\n"
+                f"Risks:      {data.get('risks', '')}"
+            )
+        except Exception:
+            return ""
+
     async def run(
         self,
         task: str,
@@ -264,6 +301,11 @@ class AgentLoop:
         """
         client, model_id = self.router.get_client(self.config.model)
         openai_tools = self.tools.get_openai_tools() or None
+
+        if self.config.enable_structured_thinking:
+            thinking_text = await self._structured_think(task, client, model_id)
+            if thinking_text:
+                yield ThinkingEvent(iteration=0, content=thinking_text)
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.config.system_prompt},
@@ -308,7 +350,7 @@ class AgentLoop:
                 )
                 # ── Record success in circuit breaker ──
                 if _RESILIENCE_AVAILABLE and _circuit_breaker is not None:
-                    _circuit_breaker.record_success(
+                    await _circuit_breaker.record_success(
                         provider, self.config.model,
                         int((time.monotonic() - _t0) * 1000)
                     )
@@ -317,10 +359,12 @@ class AgentLoop:
                 # ── Record failure + classify error ──
                 if _RESILIENCE_AVAILABLE and _circuit_breaker is not None:
                     _error_type = str(type(exc).__name__)
-                    _circuit_breaker.record_failure(provider, self.config.model, _error_type, _latency_ms)
+                    await _circuit_breaker.record_failure(provider, self.config.model, _error_type, _latency_ms)
                 # ── Check if we should retry via adaptive retry manager ──
                 if _RESILIENCE_AVAILABLE and _retry_mgr is not None:
-                    _should, _delay = _retry_mgr.should_retry(iteration, exc, _latency_ms)
+                    _decision = _retry_mgr.should_retry(iteration, exc, _latency_ms)
+                    _should = _decision.should_retry if hasattr(_decision, "should_retry") else _decision[0]
+                    _delay = _decision.delay_ms if hasattr(_decision, "delay_ms") else _decision[1]
                     if _should and iteration < self.config.max_iterations:
                         log.debug("Adaptive retry in %.0fms (attempt %d)", _delay, iteration)
                         await asyncio.sleep(_delay / 1000.0)
@@ -383,7 +427,9 @@ class AgentLoop:
                     if _PARSING_AVAILABLE and _json_healer is not None:
                         try:
                             args, _repairs = _json_healer.heal(tc.function.arguments)
-                            if _repairs:
+                            if not isinstance(args, dict):
+                                args = {}
+                            elif _repairs:
                                 log.debug(
                                     "JSONHealer applied %d repairs to tool args",
                                     len(_repairs),
@@ -556,6 +602,48 @@ async def tool_browser_action(
 
 
 # ---------------------------------------------------------------------------
+# OpenCode tool
+# ---------------------------------------------------------------------------
+
+
+async def tool_opencode_task(prompt: str) -> str:
+    """Delegate a software-engineering task to the OpenCode agent.
+
+    OpenCode is a specialised tool-use agent for coding tasks. It has
+    full access to the workspace filesystem, shell commands, and git.
+
+    This tool runs OpenCode's CLI as a subprocess and returns the
+    result as a JSON string.
+    """
+    try:
+        from .opencode_provider import OpenCodeConfig, OpenCodeProvider
+
+        provider = OpenCodeProvider(
+            config=OpenCodeConfig(working_dir=os.getcwd()),
+        )
+        result = await provider.run_task(prompt)
+        return json.dumps({
+            "success": result.success,
+            "summary": result.summary,
+            "files_changed": result.files_changed,
+            "commands_run": result.commands_run,
+            "error": result.error,
+            "output": result.output[:20_000],
+        })
+    except ImportError:
+        return json.dumps({
+            "success": False,
+            "error": "OpenCode provider not available (opencode_provider.py missing)",
+        })
+    except Exception as exc:
+        log.exception("OpenCode task failed")
+        return json.dumps({
+            "success": False,
+            "error": str(exc),
+        })
+
+
+# ---------------------------------------------------------------------------
 # Default tool factory
 # ---------------------------------------------------------------------------
 
@@ -671,6 +759,164 @@ def create_default_tools(router: ModelRouter | None = None) -> ToolRegistry:
             "required": ["url", "action"],
         },
         handler=tool_browser_action,
+    )
+
+    reg.register(
+        name="opencode_task",
+        description=(
+            "Delegate a software-engineering task (coding, refactoring, "
+            "debugging, testing) to the OpenCode specialist agent. "
+            "Use this for any task that requires reading, writing, or "
+            "editing source code files in the workspace."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Natural-language description of the coding task",
+                },
+            },
+            "required": ["prompt"],
+        },
+        handler=tool_opencode_task,
+    )
+
+    # ── Science tools ─────────────────────────────────────────────────────────
+
+    async def tool_science_analyze(description: str, data: str = "{}") -> str:
+        """Analyze scientific data using OpenCode and orchestra_science."""
+        try:
+            import json
+            from orchestra_science.engine import ScienceEngine, ScienceTask, ScienceTaskType
+            engine = ScienceEngine()
+            task = ScienceTask(
+                task_type=ScienceTaskType.ANALYSIS,
+                description=description,
+                context=json.loads(data) if isinstance(data, str) else data,
+            )
+            result = await engine.run(task)
+            return result.content or result.error or "No output"
+        except Exception as e:
+            return f"Science analysis error: {e}"
+
+    async def tool_science_pubchem(query: str, namespace: str = "name") -> str:
+        """Search PubChem for chemical compounds."""
+        try:
+            import json
+            from orchestra_science.ingestion.pubchem import PubChemClient
+            async with PubChemClient() as client:
+                compounds = await client.search_compound(query, namespace, max_results=5)
+            return json.dumps([c.to_dict() for c in compounds], indent=2)
+        except Exception as e:
+            return f"PubChem search error: {e}"
+
+    async def tool_science_literature(topic: str) -> str:
+        """Conduct a literature review on a scientific topic."""
+        try:
+            from orchestra_science.workflows.literature_review import LitReviewWorkflow
+            from orchestra_science.engine import ScienceEngine
+            engine = ScienceEngine()
+            wf = LitReviewWorkflow()
+            result = await wf.run(topic, engine)
+            return result.summary or "No results"
+        except Exception as e:
+            return f"Literature review error: {e}"
+
+    async def tool_science_docking(protein_pdb: str, ligand_smiles: str) -> str:
+        """Run molecular docking analysis."""
+        try:
+            from orchestra_science.workflows.molecular_docking import DockingWorkflow
+            from orchestra_science.engine import ScienceEngine
+            engine = ScienceEngine()
+            wf = DockingWorkflow()
+            result = await wf.run(protein_pdb, ligand_smiles, engine)
+            return result.analysis or result.error or "No output"
+        except Exception as e:
+            return f"Docking analysis error: {e}"
+
+    async def tool_science_report(title: str, objective: str, methods: str = "", results: str = "") -> str:
+        """Generate a scientific lab report."""
+        try:
+            from orchestra_science.reporting.report_generator import ScienceReportGenerator
+            from orchestra_science.engine import ScienceEngine
+            engine = ScienceEngine()
+            reporter = ScienceReportGenerator()
+            content = await reporter.generate_lab_report(
+                title=title, objective=objective,
+                methods=methods, results=results,
+                discussion="", conclusion="",
+                engine=engine,
+            )
+            return content
+        except Exception as e:
+            return f"Report generation error: {e}"
+
+    reg.register(
+        name="science_analyze",
+        description="Analyze scientific data (chemistry, biology, physics) using OpenCode. Provide the analysis description and optional data as JSON.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "Analysis task description"},
+                "data": {"type": "string", "description": "Optional JSON data"},
+            },
+            "required": ["description"],
+        },
+        handler=tool_science_analyze,
+    )
+    reg.register(
+        name="science_pubchem_search",
+        description="Search PubChem for chemical compounds by name, SMILES, or formula.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Compound name or identifier"},
+                "namespace": {"type": "string", "enum": ["name", "smiles", "cid", "formula"]},
+            },
+            "required": ["query"],
+        },
+        handler=tool_science_pubchem,
+    )
+    reg.register(
+        name="science_literature_review",
+        description="Conduct a literature review on any scientific topic using multi-perspective research and synthesis.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Research topic"},
+            },
+            "required": ["topic"],
+        },
+        handler=tool_science_literature,
+    )
+    reg.register(
+        name="science_docking",
+        description="Run molecular docking analysis for a protein and ligand.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "protein_pdb": {"type": "string", "description": "PDB code (e.g. 1ake)"},
+                "ligand_smiles": {"type": "string", "description": "Ligand SMILES string"},
+            },
+            "required": ["protein_pdb", "ligand_smiles"],
+        },
+        handler=tool_science_docking,
+    )
+    reg.register(
+        name="science_generate_report",
+        description="Generate a formatted scientific lab report.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "objective": {"type": "string"},
+                "methods": {"type": "string"},
+                "results": {"type": "string"},
+            },
+            "required": ["title", "objective"],
+        },
+        handler=tool_science_report,
     )
 
     return reg
