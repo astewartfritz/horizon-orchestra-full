@@ -322,3 +322,6 @@
 {"trace_id": "c13b52dd", "span_id": "09c205e8", "parent_id": "", "name": "s1", "start_time": 1779728238.4687767, "end_time": 1779728238.4839451, "attributes": {}, "status": "ok"}
 {"trace_id": "c6eaf80b", "span_id": "eb606c6e", "parent_id": "", "name": "fail-span", "start_time": 1779728238.53027, "end_time": 1779728238.539618, "attributes": {}, "status": "error"}
 {"trace_id": "e3173b1b", "span_id": "0ecd0213", "parent_id": "", "name": "s", "start_time": 1779728238.7552254, "end_time": 1779728238.773648, "attributes": {}, "status": "ok"}
+{"trace_id": "403eb261", "span_id": "e5d587bf", "parent_id": "", "name": "s1", "start_time": 1779750137.483884, "end_time": 1779750137.5046098, "attributes": {}, "status": "ok"}
+{"trace_id": "0e75cbf1", "span_id": "f19cfb9e", "parent_id": "", "name": "fail-span", "start_time": 1779750137.5528781, "end_time": 1779750137.5627341, "attributes": {}, "status": "error"}
+{"trace_id": "ad1050d1", "span_id": "c7ee5045", "parent_id": "", "name": "s", "start_time": 1779750137.7182171, "end_time": 1779750137.727319, "attributes": {}, "status": "ok"}
