@@ -23,7 +23,7 @@ from pathlib import Path
 
 _DB_PATH = Path.home() / ".orchestra_sessions.db"
 _lock = threading.Lock()
-_MAX_SESSIONS = int(os.environ.get("MAX_CONCURRENT_SESSIONS", "5"))
+_MAX_SESSIONS = int(os.environ.get("MAX_CONCURRENT_SESSIONS", "50"))
 _BIND_IP = os.environ.get("SESSION_BIND_IP", "").lower() in ("1", "true", "yes")
 
 
@@ -48,6 +48,13 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_sess_user   ON active_sessions(user_id, status);
             CREATE INDEX IF NOT EXISTS idx_sess_status ON active_sessions(status);
         """)
+        # On startup: clear all evicted/revoked sessions and anything older than 24h.
+        # This prevents accumulated JTIs from pushing valid sessions over the limit.
+        cutoff = time.time() - 86400
+        conn.execute(
+            "DELETE FROM active_sessions WHERE status != 'active' OR last_seen < ?",
+            (cutoff,),
+        )
 
 
 def register_session(

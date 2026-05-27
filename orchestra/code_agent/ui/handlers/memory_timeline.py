@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from orchestra.code_agent.session import SessionManager
 
@@ -28,7 +28,7 @@ def register_memory_timeline_routes(app: FastAPI, sessions: SessionManager) -> N
 
         if request.headers.get("hx-request") == "true":
             if not items:
-                return '<div style="color:#8b949e;font-size:13px;padding:16px;text-align:center">No past sessions found</div>'
+                return HTMLResponse('<div style="color:#8b949e;font-size:13px;padding:16px;text-align:center">No past sessions found</div>')
             import html as _html
             parts = ['<div class="timeline">']
             for s in items:
@@ -46,7 +46,7 @@ def register_memory_timeline_routes(app: FastAPI, sessions: SessionManager) -> N
                     f'</div>'
                 )
             parts.append('</div>')
-            return "".join(parts)
+            return HTMLResponse("".join(parts))
 
         return JSONResponse(items)
 

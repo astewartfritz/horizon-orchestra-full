@@ -5,7 +5,6 @@ import inspect
 import json
 import logging
 import os
-import tempfile
 import uuid
 
 _logger = logging.getLogger("orchestra.chat")
@@ -39,9 +38,19 @@ class FrontierRequest(BaseModel):
     include_tabs: bool = True
 
 
+class VisionRequest(BaseModel):
+    image: str = ""
+    prompt: str = "Describe this image in detail."
+
+
 class PrinceRequest(BaseModel):
     question: str
     search_query: str | None = None
+
+
+class _CreateSpaceReq(BaseModel):
+    name: str = "Untitled"
+    description: str = ""
 
 
 class AgenticChatRequest(BaseModel):
@@ -387,8 +396,6 @@ def register_chat_routes(
         # Gate: require Pro subscription for real code execution
         try:
             from orchestra.code_agent.billing.routes import require_pro
-            from orchestra.code_agent.billing.store import SubscriptionStore
-            import os
             if os.environ.get("STRIPE_SECRET_KEY"):
                 local_id = (request.headers.get("X-Customer-Id", "") if request else "")
                 require_pro(local_id)
@@ -1011,12 +1018,6 @@ def register_chat_routes(
             info["providers"]["vllm"] = {"available": False}
         return info
 
-    from pydantic import BaseModel as _BM
-
-    class VisionRequest(_BM):
-        image: str = ""
-        prompt: str = "Describe this image in detail."
-
     @app.post("/api/vision/describe")
     async def vision_describe(req: VisionRequest):
         if not req.image:
@@ -1073,10 +1074,6 @@ def register_chat_routes(
         mgr = SpaceManager()
         return {"spaces": mgr.list()}
 
-    class _CreateSpaceReq(BaseModel):
-        name: str = "Untitled"
-        description: str = ""
-
     @app.post("/api/spaces")
     async def create_space(req: _CreateSpaceReq):
         from orchestra.code_agent.ui.spaces import SpaceManager
@@ -1100,7 +1097,8 @@ def register_chat_routes(
         return a.to_dict()
 
     @app.post("/api/browser/navigate")
-    async def browser_navigate(body: dict = {}):
+    async def browser_navigate(body: dict | None = None):
+        body = body or {}
         url = body.get("url", "https://example.com")
         try:
             from orchestra.code_agent.browser.chromium import ChromiumController
@@ -1137,7 +1135,8 @@ def register_chat_routes(
         return {"deleted": ok}
 
     @app.post("/api/memory/toggle")
-    async def toggle_memory(body: dict = {}):
+    async def toggle_memory(body: dict | None = None):
+        body = body or {}
         enabled = body.get("enabled", False)
         # Store in a simple config file
         try:

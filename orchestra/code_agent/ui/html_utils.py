@@ -68,14 +68,14 @@ def render_context_html(cd: dict) -> str:
     if not cd.get("tiers") or all(t["count"] == 0 for t in cd["tiers"]):
         html += '<div style="color:#8b949e;font-size:11px;padding:4px 0">No entries yet</div>'
 
-    html += """</div>
+    html += f"""</div>
 
 <div class="ctx-section">
   <h4>Stats</h4>
-  <div class="ctx-stat-row"><span class="lbl">Entries</span><span class="val">${cd['entries']}</span></div>
-  <div class="ctx-stat-row"><span class="lbl">Free</span><span class="val">${fmt_tokens(cd['free_tokens'])}</span></div>
-  <div class="ctx-stat-row"><span class="lbl">Reserve</span><span class="val">${fmt_tokens(cd['reserve_tokens'])}</span></div>
-  <div class="ctx-stat-row"><span class="lbl">Used</span><span class="val">${fmt_tokens(cd['used_tokens'])}</span></div>
+  <div class="ctx-stat-row"><span class="lbl">Entries</span><span class="val">{cd['entries']}</span></div>
+  <div class="ctx-stat-row"><span class="lbl">Free</span><span class="val">{fmt_tokens(cd['free_tokens'])}</span></div>
+  <div class="ctx-stat-row"><span class="lbl">Reserve</span><span class="val">{fmt_tokens(cd['reserve_tokens'])}</span></div>
+  <div class="ctx-stat-row"><span class="lbl">Used</span><span class="val">{fmt_tokens(cd['used_tokens'])}</span></div>
 </div>"""
 
     sources = cd.get("sources", {})

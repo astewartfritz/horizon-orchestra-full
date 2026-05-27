@@ -8,7 +8,7 @@ _log = logging.getLogger("orchestra.server")
 
 try:
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import HTMLResponse, RedirectResponse
     from fastapi.middleware.cors import CORSMiddleware
     HAS_FASTAPI = True
 except ImportError:
@@ -227,9 +227,17 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
     except Exception as _e:
         _log.warning("Owner seed failed: %s", _e)
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/", response_class=RedirectResponse)
     async def index():
+        return RedirectResponse(url="/app", status_code=302)
+
+    @app.get("/landing", response_class=HTMLResponse)
+    async def landing_page():
         return LANDING_HTML
+
+    @app.get("/mail", response_class=RedirectResponse)
+    async def mail_shortcut():
+        return RedirectResponse(url="/miles/#/mail", status_code=302)
 
     @app.get("/app", response_class=HTMLResponse)
     async def app_page():
@@ -395,8 +403,24 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
     # Server-side API key storage (replaces localStorage)
     try:
         from orchestra.code_agent.api_keys import register_api_key_routes, ApiKeyStore
-        ApiKeyStore.get()  # init DB
+        store = ApiKeyStore.get()  # init DB
         register_api_key_routes(app)
+        # Hydrate env vars from stored keys so the router can find them
+        import os as _os
+        for _prov, _env_var in (
+            ("moonshot", "MOONSHOT_API_KEY"),
+            ("openai", "OPENAI_API_KEY"),
+            ("anthropic", "ANTHROPIC_API_KEY"),
+            ("gemini", "GOOGLE_API_KEY"),
+            ("groq", "GROQ_API_KEY"),
+            ("together", "TOGETHER_API_KEY"),
+            ("perplexity", "PERPLEXITY_API_KEY"),
+            ("openrouter", "OPENROUTER_API_KEY"),
+        ):
+            if not _os.environ.get(_env_var):
+                _key = store.reveal("__anonymous__", _prov)
+                if _key:
+                    _os.environ[_env_var] = _key
     except Exception as _e:
         import logging as _lg
         _lg.getLogger("orchestra").warning("api_keys init failed: %s", _e)
@@ -439,6 +463,16 @@ def create_ui_app(agent_config: AgentConfig | None = None) -> FastAPI:
     try:
         from orchestra.code_agent.legal.routes import register_legal_routes
         register_legal_routes(app)
+    except Exception:
+        pass
+    try:
+        from orchestra.code_agent.memory.cross_vertical.routes import register_cross_vertical_routes
+        register_cross_vertical_routes(app)
+    except Exception:
+        pass
+    try:
+        from orchestra.horizon_mail.routes import register_horizon_mail_routes
+        register_horizon_mail_routes(app)
     except Exception:
         pass
     try:

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from orchestra.code_agent.session import Session, SessionManager
 
@@ -19,7 +19,7 @@ def register_session_routes(app: FastAPI, sessions: SessionManager) -> None:
         # All other clients (REST, test) get JSON.
         if request.headers.get("hx-request") == "true":
             if not items:
-                return '<div style="color:#8b949e;font-size:13px;padding:8px">No sessions yet</div>'
+                return HTMLResponse('<div style="color:#8b949e;font-size:13px;padding:8px">No sessions yet</div>')
             import html as _html
             parts = []
             for s in items:
@@ -43,7 +43,7 @@ def register_session_routes(app: FastAPI, sessions: SessionManager) -> None:
                     f'{meta_html}'
                     f'</div>'
                 )
-            return "".join(parts)
+            return HTMLResponse("".join(parts))
 
         return JSONResponse(items)
 
@@ -111,7 +111,7 @@ def register_session_routes(app: FastAPI, sessions: SessionManager) -> None:
     async def get_session_messages(sid: str):
         session = sessions.load(sid)
         if not session:
-            return "<div style='color:#8b949e;padding:16px'>Session not found</div>"
+            return HTMLResponse("<div style='color:#8b949e;padding:16px'>Session not found</div>")
         import html as _html
         parts = []
         for m in session.messages:
@@ -128,5 +128,5 @@ def register_session_routes(app: FastAPI, sessions: SessionManager) -> None:
             else:
                 parts.append(f'<div class="msg assistant"><div class="msg-label">{label}</div><div class="msg-content">{escaped}</div></div>')
         if not parts:
-            return "<div style='color:#8b949e;padding:16px'>No messages</div>"
-        return "".join(parts)
+            return HTMLResponse("<div style='color:#8b949e;padding:16px'>No messages</div>")
+        return HTMLResponse("".join(parts))

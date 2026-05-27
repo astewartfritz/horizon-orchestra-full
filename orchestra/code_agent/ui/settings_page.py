@@ -106,6 +106,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
         <div class="radio-group" id="provider-group">
           <button class="radio-btn selected" data-val="anthropic" onclick="selectProvider(this)">Anthropic</button>
           <button class="radio-btn" data-val="openai" onclick="selectProvider(this)">OpenAI</button>
+          <button class="radio-btn" data-val="moonshot" onclick="selectProvider(this)">Moonshot (Kimi)</button>
           <button class="radio-btn" data-val="ollama" onclick="selectProvider(this)">Ollama (local)</button>
           <button class="radio-btn" data-val="openrouter" onclick="selectProvider(this)">OpenRouter</button>
         </div>
@@ -305,6 +306,7 @@ function toast(msg) {
 var _modelsByProvider = {
   anthropic:   [['claude-opus-4-7','Opus 4.7','Most capable, best for complex tasks'],['claude-sonnet-4-6','Sonnet 4.6','Fast and smart — best value'],['claude-haiku-4-5-20251001','Haiku 4.5','Fastest, great for quick tasks']],
   openai:      [['gpt-4o','GPT-4o','Flagship multimodal'],['gpt-4o-mini','GPT-4o mini','Fast and cheap'],['o1','o1','Deep reasoning']],
+  moonshot:    [['kimi-k2.5','Kimi K2.5','262K ctx, reasoning, coding, vision'],['kimi-k2.5-openrouter','Kimi K2.5 (OpenRouter)','via OpenRouter fallback'],['kimi-k2.5-together','Kimi K2.5 (Together)','via Together fallback']],
   ollama:      [['llama3.2','Llama 3.2','Meta — local, free'],['gemma3','Gemma 3','Google — local'],['deepseek-r1:8b','DeepSeek R1','Reasoning model']],
   openrouter:  [['openai/gpt-4o','GPT-4o','via OpenRouter'],['anthropic/claude-opus-4','Claude Opus 4','via OpenRouter'],['meta-llama/llama-3.1-70b','Llama 3.1 70B','via OpenRouter']],
 };
@@ -319,7 +321,7 @@ function selectProvider(btn) {
   var noKey = _selectedProvider === 'ollama';
   document.getElementById('key-required').style.display = noKey ? 'none' : '';
   document.getElementById('s-api-key').placeholder = 'Paste your API key';
-  var hints = { anthropic:'console.anthropic.com/settings/keys', openai:'platform.openai.com/api-keys', openrouter:'openrouter.ai/keys' };
+  var hints = { anthropic:'console.anthropic.com/settings/keys', openai:'platform.openai.com/api-keys', moonshot:'platform.moonshot.ai/api-keys', openrouter:'openrouter.ai/keys' };
   var h = hints[_selectedProvider];
   document.getElementById('key-hint').innerHTML = h ? 'Get your key at <a href="https://'+h+'" target="_blank" style="color:var(--blue)">'+h+'</a>' : '';
   loadKeyStatus();

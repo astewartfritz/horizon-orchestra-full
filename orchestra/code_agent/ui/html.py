@@ -577,21 +577,20 @@ sup.citation:hover { text-decoration: underline; }
       </div>
     </div>
   </div>
-  <!-- Theme toggle — centered absolutely in header -->
-  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10">
-    <div class="theme-pill" id="theme-pill-wrap" title="Toggle light / dark mode">
-      <button class="theme-pill__seg" id="theme-dark-btn" type="button">🌙 Dark</button>
-      <button class="theme-pill__seg" id="theme-light-btn" type="button">☀️ Light</button>
-    </div>
-  </div>
   <div style="display:flex;gap:6px;align-items:center">
     <button id="mobile-sidebar-toggle" onclick="toggleMobileSidebar()" title="Menu">&#x2630;</button>
     <span id="status" style="font-size:12px;color:var(--text-secondary);padding:2px 8px;background:var(--bg-tertiary);border-radius:8px">Idle</span>
     <button class="header-btn" onclick="toggleContext()">Context</button>
     <button class="header-btn" onclick="newSession()">+ New</button>
-    <a href="/healthcare/app" target="_blank" style="text-decoration:none"><button class="header-btn" style="color:#10b981;border-color:#10b981;font-weight:600">&#x1FA7A; Health</button></a>
-    <a href="/legal/app" target="_blank" style="text-decoration:none"><button class="header-btn" style="color:#a78bfa;border-color:#a78bfa;font-weight:600">&#x2696; Legal</button></a>
-    <a href="/finance/app" target="_blank" style="text-decoration:none"><button class="header-btn" style="color:#34d399;border-color:#34d399;font-weight:600">&#x1F4C8; Finance</button></a>
+    <div style="position:relative" id="verticals-menu-wrap">
+      <button class="header-btn" id="verticals-btn" onclick="toggleVerticalsMenu()" style="color:#8282f7;border-color:#8282f7;font-weight:600">&#x1F4CA; Verticals &#x25BE;</button>
+      <div id="verticals-menu" style="display:none;position:absolute;top:calc(100%+6px);left:0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px;z-index:200;box-shadow:var(--shadow-md);min-width:148px;flex-direction:column;gap:2px">
+        <a href="/healthcare/app" target="_blank" style="text-decoration:none"><button class="overflow-item" style="color:#10b981;width:100%;text-align:left">&#x1FA7A; Healthcare</button></a>
+        <a href="/legal/app" target="_blank" style="text-decoration:none"><button class="overflow-item" style="color:#a78bfa;width:100%;text-align:left">&#x2696;&#xFE0F; Legal</button></a>
+        <a href="/finance/app" target="_blank" style="text-decoration:none"><button class="overflow-item" style="color:#34d399;width:100%;text-align:left">&#x1F4C8; Financial</button></a>
+      </div>
+    </div>
+    <a href="/miles/#/mail" target="_blank" style="text-decoration:none"><button class="header-btn" style="color:#00c9b8;border-color:#00c9b8;font-weight:600">&#x2709;&#xFE0F; Mail</button></a>
     <button class="header-btn" id="billing-btn" onclick="window.open('/billing','_blank')" style="font-weight:600" title="Billing &amp; plan"></button>
     <button class="header-btn" onclick="openSelfImprove()" title="Analyze Orchestra and surface improvements" style="color:#a78bfa;border-color:#a78bfa;font-weight:600">&#x1F9E0; Improve</button>
     <button class="header-btn" onclick="openLogsPanel()" title="Logs &amp; errors" id="logs-btn" style="color:#58a6ff;border-color:#58a6ff;font-weight:600;position:relative">&#x1F4CB; Logs<span id="logs-err-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#f85149;color:#fff;border-radius:50%;font-size:9px;font-weight:700;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1">!</span></button>
@@ -599,7 +598,7 @@ sup.citation:hover { text-decoration: underline; }
     <!-- Power-user overflow menu -->
     <div style="position:relative">
       <button class="header-btn" id="overflow-btn" onclick="toggleOverflow()" title="Developer tools" style="padding:5px 8px;font-size:13px">&#x22EF;</button>
-      <div id="overflow-menu" style="display:none;position:absolute;top:calc(100%+6px);right:0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px;z-index:200;box-shadow:var(--shadow-md);min-width:150px;flex-direction:column;gap:2px">
+      <div id="overflow-menu" style="display:none;position:absolute;top:calc(100%+6px);right:0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px;z-index:200;box-shadow:var(--shadow-md);min-width:160px;flex-direction:column;gap:2px">
         <button class="overflow-item" onclick="window.open('http://localhost:3001','_blank');toggleOverflow()" id="jarvis-item">&#x1F916; OpenJARVIS</button>
         <button class="overflow-item" onclick="toggleJarvis();toggleOverflow()" id="jarvis-mode-item">J.A.R.V.I.S mode</button>
         <button class="overflow-item" onclick="openSelfImprove();toggleOverflow()">&#x1F527; Self-Improve</button>
@@ -621,6 +620,12 @@ sup.citation:hover { text-decoration: underline; }
     </button>
   </div>
 </header>
+<div style="display:flex;justify-content:center;align-items:center;padding:4px 0;background:var(--bg-secondary);border-bottom:1px solid var(--border-subtle);flex-shrink:0;position:relative;z-index:49">
+  <div class="theme-pill" id="theme-pill-wrap" title="Toggle light / dark mode">
+    <button class="theme-pill__seg" id="theme-dark-btn" type="button">🌙 Dark</button>
+    <button class="theme-pill__seg" id="theme-light-btn" type="button">☀️ Light</button>
+  </div>
+</div>
 <div id="sidebar-backdrop" onclick="toggleMobileSidebar()"></div>
 <div id="body">
   <!-- Left Sidebar: Navigation + Spaces + Sessions -->
@@ -637,7 +642,7 @@ sup.citation:hover { text-decoration: underline; }
       <span class="count" id="session-count">0</span>
     </div>
     <!-- Sessions list (default view) -->
-    <div id="session-list" class="sidebar-view active" hx-get="/api/sessions" hx-trigger="every:5s" hx-swap="innerHTML">
+    <div id="session-list" class="sidebar-view active" hx-get="/api/sessions" hx-trigger="load, every:5s" hx-swap="innerHTML">
       <div style="color:var(--text-secondary);font-size:13px;padding:8px">Loading...</div>
     </div>
     <!-- Spaces list -->
@@ -2061,6 +2066,20 @@ document.addEventListener('click', function(e) {
   }
 });
 
+var _verticalsOpen = false;
+function toggleVerticalsMenu() {
+  _verticalsOpen = !_verticalsOpen;
+  var m = document.getElementById('verticals-menu');
+  m.style.display = _verticalsOpen ? 'flex' : 'none';
+}
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('verticals-menu-wrap');
+  if (_verticalsOpen && wrap && !wrap.contains(e.target)) {
+    _verticalsOpen = false;
+    document.getElementById('verticals-menu').style.display = 'none';
+  }
+});
+
 window.switchTab = function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; });
@@ -2615,6 +2634,8 @@ window.toggleCtxEntry = toggleCtxEntry;
 window.toggleContext = toggleContext;
 window.toggleConfig = toggleConfig;
 window.toggleOverflow = toggleOverflow;
+window.toggleVerticalsMenu = toggleVerticalsMenu;
+window.showToast = showToast;
 window.refreshSkills = refreshSkills;
 window.pruneSkills = pruneSkills;
 window.showToolDetail = showToolDetail;
@@ -3536,7 +3557,7 @@ var _obSteps = [
       ];
       var html = '<div class="ob-prompt-grid">';
       prompts.forEach(function(p, i) {
-        html += '<button class="ob-prompt-card" onclick="obPickPrompt(this,'+i+')" data-text="'+p.text.replace(/"/g,\'&quot;\')+'">'
+        html += '<button class="ob-prompt-card" onclick="obPickPrompt(this,'+i+')" data-text="'+p.text.replace(/"/g,"&quot;")+'">'
           + '<span class="emoji">'+p.emoji+'</span>'
           + '<span class="text">'+p.text+'</span>'
           + '</button>';
