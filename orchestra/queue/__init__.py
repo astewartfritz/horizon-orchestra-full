@@ -22,6 +22,18 @@ from .worker import Worker
 from .checkpoint import CheckpointStore, WorkflowCheckpoint
 from .timer import TimerStore, WorkflowSuspended, workflow_sleep
 from .runner import WorkflowRunner
+from .backend import MemoryBackend, RedisBackend, PostgresBackend
+
+try:
+    from .celery_bridge import (  # noqa: F401
+        get_data_job_status,
+        revoke_data_job,
+        submit_data_job,
+    )
+    from .routes import register_data_job_routes  # noqa: F401
+    _HAS_CELERY = True
+except ImportError:
+    _HAS_CELERY = False
 
 __all__ = [
     "Job",
@@ -33,8 +45,16 @@ __all__ = [
     "WorkflowSuspended",
     "workflow_sleep",
     "WorkflowRunner",
+    "MemoryBackend",
+    "RedisBackend",
+    "PostgresBackend",
     "get_queue",
     "set_queue",
+    # Celery bridge (optional — available when celery is installed)
+    "submit_data_job",
+    "get_data_job_status",
+    "revoke_data_job",
+    "register_data_job_routes",
 ]
 
 _queue: JobQueue | None = None

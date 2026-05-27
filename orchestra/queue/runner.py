@@ -43,7 +43,7 @@ class WorkflowRunner:
         checkpoint_store: CheckpointStore | None = None,
         timer_store: TimerStore | None = None,
     ) -> None:
-        self._queue = JobQueue()
+        self._queue = JobQueue.memory()
         self._checkpoints = checkpoint_store or CheckpointStore()
         self._timers = timer_store or TimerStore()
         self._handlers: dict[str, Callable[[Job], Awaitable[dict]]] = {}
@@ -68,7 +68,7 @@ class WorkflowRunner:
         priority: int = 5,
     ) -> str:
         job = Job.new(name=name, payload=payload, priority=priority)
-        await self._queue.enqueue(job)
+        await self._queue._enqueue(job)
         log.info("submitted job %s (%s)", job.id, name)
         return job.id
 
@@ -116,5 +116,5 @@ class WorkflowRunner:
                 name=cp.goal[:50],   # job name is the first 50 chars of goal
                 payload={"workflow_id": wid, "goal": cp.goal},
             )
-            await self._queue.enqueue(job)
+            await self._queue._enqueue(job)
             self._timers.clear(wid)
