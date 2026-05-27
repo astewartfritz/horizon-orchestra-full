@@ -29,7 +29,8 @@ def register_telemetry_routes(app, prefix: str = "/api/telemetry"):
         return {"trace_id": trace_id, "span_id": span_id}
 
     @router.put("/traces/{trace_id}/spans/{span_id}")
-    async def end_span(trace_id: str, span_id: str, body: dict = {}):
+    async def end_span(trace_id: str, span_id: str, body: dict | None = None):
+        body = body or {}
         ctx = tracer.get_trace(trace_id)
         if not ctx:
             raise HTTPException(404, "Trace not found")

@@ -55,7 +55,8 @@ def register_workflow_v2_routes(app, prefix: str = "/api/workflow-v2"):
         return workflow_to_dict(wf)
 
     @router.post("/workflows/{workflow_id}/run")
-    async def run_workflow(workflow_id: str, body: dict = {}):
+    async def run_workflow(workflow_id: str, body: dict | None = None):
+        body = body or {}
         try:
             ctx = await mgr.run_workflow(workflow_id, body.get("vars"))
         except ValueError as e:

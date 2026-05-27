@@ -61,7 +61,8 @@ def register_billing_routes(app: Any) -> None:
     # ── Checkout ──────────────────────────────────────────────────────────────
 
     @router.post("/checkout")
-    async def create_checkout(request: Request, body: dict[str, Any] = {}):
+    async def create_checkout(request: Request, body: dict[str, Any] | None = None):
+        body = body or {}
         if not stripe_client.configured:
             raise HTTPException(
                 status_code=503,
@@ -89,7 +90,8 @@ def register_billing_routes(app: Any) -> None:
     # ── Customer Portal ───────────────────────────────────────────────────────
 
     @router.post("/portal")
-    async def customer_portal(request: Request, body: dict[str, Any] = {}):
+    async def customer_portal(request: Request, body: dict[str, Any] | None = None):
+        body = body or {}
         if not stripe_client.configured:
             raise HTTPException(status_code=503, detail="Stripe not configured.")
         local_id = request.headers.get("X-Customer-Id", "") or body.get("local_id", "")

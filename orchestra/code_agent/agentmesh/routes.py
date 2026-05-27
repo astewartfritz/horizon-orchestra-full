@@ -68,7 +68,8 @@ def register_agentmesh_routes(app, prefix: str = "/api/agentmesh"):
         return {"status": "unregistered"}
 
     @router.post("/agents/{agent_id}/heartbeat")
-    async def agent_heartbeat(agent_id: str, body: dict = {}):
+    async def agent_heartbeat(agent_id: str, body: dict | None = None):
+        body = body or {}
         status = body.get("status")
         status_enum = AgentStatus(status) if status else None
         ok = mesh.registry.heartbeat(agent_id, status_enum)
