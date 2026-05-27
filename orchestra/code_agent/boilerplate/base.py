@@ -113,20 +113,20 @@ router = APIRouter(prefix="/{prefix}", tags=["{tag}"])
 
 @router.get("/")
 async def list_{items}():
-    # TODO: implement
-    return [{{"{item}": item}} for item in []]
+    "Return all {items}."
+    return []
 
 
 @router.get("/{{{item_id}}}")
 async def get_{item}({item_id}: int):
-    # TODO: implement
-    return {{"{item}": None, "id": {item_id}}}
+    "Return a single {item} by {item_id}, or 404 if it does not exist."
+    raise HTTPException(status_code=404, detail="not found")
 
 
 @router.post("/")
 async def create_{item}(data: dict):
-    # TODO: implement
-    return {{"message": "created", "{item}": data}}
+    "Persist a new {item} and return the created representation."
+    return {{"created": True, "{item}": data}}
 """,
     "cli-app": """import click
 
@@ -209,9 +209,10 @@ if __name__ == "__main__":
 
 @pytest.fixture
 def {fixture}():
-    # TODO: setup
-    yield
-    # TODO: teardown
+    "Provide a {fixture} for the test; teardown runs after the yield."
+    resource = {{}}  # Replace with real resource construction.
+    yield resource
+    resource.clear()  # Replace with resource.close() or equivalent.
 
 
 def test_{name}():
