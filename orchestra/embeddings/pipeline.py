@@ -36,6 +36,13 @@ except ImportError:
     SupabaseVectorStore = None  # type: ignore[assignment]
     _HAS_SUPABASE = False
 
+try:
+    from .chroma import ChromaStore
+    _HAS_CHROMA = True
+except ImportError:
+    ChromaStore = None  # type: ignore[assignment]
+    _HAS_CHROMA = False
+
 __all__ = [
     "EmbeddingPipeline",
     "PipelineConfig",
@@ -64,7 +71,7 @@ class PipelineConfig:
     min_chunk_size: int = 20  # micro-fragments below this are merged
 
     # Vector store backend
-    store_backend: Literal["memory", "pgvector", "pinecone", "supabase"] = "memory"
+    store_backend: Literal["memory", "pgvector", "pinecone", "supabase", "chroma"] = "memory"
 
     # In-memory index options
     index_metric: str = "cosine"
@@ -86,6 +93,14 @@ class PipelineConfig:
     supabase_url: str = ""
     supabase_key: str = ""
     supabase_collection: str = "default"
+
+    # Chroma options
+    chroma_mode: str = "embedded"       # "embedded" | "http"
+    chroma_path: str = ".chroma"        # local path for embedded mode
+    chroma_host: str = "localhost"      # HTTP mode host
+    chroma_port: int = 8000             # HTTP mode port
+    chroma_collection: str = "default"
+    chroma_metric: str = "cosine"       # cosine | l2 | ip
 
     # Embedding cache options
     embedding_cache_size: int = 10000
@@ -164,6 +179,7 @@ class EmbeddingPipeline:
         pgvector_store: PGVectorStore | None = None,
         pinecone_store: Any = None,
         supabase_store: Any = None,
+        chroma_store: Any = None,
         embedding_cache: EmbeddingCache | None = None,
     ) -> None:
         self.config = config or PipelineConfig()
@@ -189,6 +205,7 @@ class EmbeddingPipeline:
         self._pgvector_store: PGVectorStore | None = pgvector_store
         self._pinecone_store: Any = pinecone_store
         self._supabase_store: Any = supabase_store
+        self._chroma_store: Any = chroma_store
 
         if self._store_backend == "memory" and self._vector_index is None:
             self._vector_index = VectorIndex(
@@ -287,6 +304,33 @@ class EmbeddingPipeline:
                 "Initialized Supabase collection %r (%d dims)",
                 self.config.supabase_collection,
                 self._dimensions,
+            )
+
+        elif self._store_backend == "chroma":
+            if not _HAS_CHROMA:
+                raise ImportError(
+                    "chromadb is required when store_backend='chroma'. "
+                    "Install with: pip install chromadb"
+                )
+            if self._chroma_store is None:
+                self._chroma_store = ChromaStore(
+                    mode=self.config.chroma_mode,
+                    path=self.config.chroma_path,
+                    host=self.config.chroma_host,
+                    port=self.config.chroma_port,
+                    default_metric=self.config.chroma_metric,
+                )
+            await self._chroma_store.connect()
+            await self._chroma_store.create_collection(
+                self.config.chroma_collection,
+                dimensions=self._dimensions,
+                if_not_exists=True,
+            )
+            log.info(
+                "Initialized ChromaDB collection %r (%d dims, mode=%s)",
+                self.config.chroma_collection,
+                self._dimensions,
+                self.config.chroma_mode,
             )
 
         self._initialized = True
@@ -397,6 +441,13 @@ class EmbeddingPipeline:
         elif self._store_backend == "supabase" and self._supabase_store is not None:
             await self._supabase_store.batch_insert(
                 self.config.supabase_collection,
+                chunk_ids,
+                vectors,
+                chunk_metas,
+            )
+        elif self._store_backend == "chroma" and self._chroma_store is not None:
+            await self._chroma_store.batch_insert(
+                self.config.chroma_collection,
                 chunk_ids,
                 vectors,
                 chunk_metas,
@@ -576,6 +627,22 @@ class EmbeddingPipeline:
                 )
                 for r in raw_sb
             ]
+        elif self._store_backend == "chroma" and self._chroma_store is not None:
+            raw_ch = await self._chroma_store.search(
+                self.config.chroma_collection,
+                query_vector,
+                top_k=top_k,
+                filters=filters,
+            )
+            return [
+                SearchResult(
+                    id=r.id,
+                    score=r.score,
+                    text=self._chunk_texts.get(r.id, ""),
+                    metadata=r.metadata,
+                )
+                for r in raw_ch
+            ]
         else:
             raise RuntimeError("No vector store available")
 
@@ -650,6 +717,13 @@ class EmbeddingPipeline:
             )
             for cid in chunk_ids:
                 self._chunk_texts.pop(cid, None)
+        elif self._store_backend == "chroma" and self._chroma_store is not None:
+            count = await self._chroma_store.delete_by_metadata(
+                self.config.chroma_collection,
+                {"source": source},
+            )
+            for cid in chunk_ids:
+                self._chunk_texts.pop(cid, None)
         else:
             raise RuntimeError("No vector store available")
 
@@ -700,6 +774,8 @@ class EmbeddingPipeline:
             await self._pinecone_store.close()
         if self._supabase_store is not None:
             await self._supabase_store.close()
+        if self._chroma_store is not None:
+            await self._chroma_store.close()
         if self._cache is not None:
             self._cache.close()
 
@@ -720,6 +796,8 @@ class EmbeddingPipeline:
             store = self._pinecone_store
         elif self._store_backend == "supabase":
             store = self._supabase_store
+        elif self._store_backend == "chroma":
+            store = self._chroma_store
 
         if store is None or not hasattr(store, "health_check"):
             return {"status": "unknown", "backend": self._store_backend, "latency_ms": 0.0}

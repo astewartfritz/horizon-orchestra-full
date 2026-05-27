@@ -63,6 +63,14 @@ except ImportError:
     SupabaseDistanceMetric = None  # type: ignore[assignment]
     _HAS_SUPABASE = False
 
+try:
+    from .chroma import ChromaStore, SearchResult as ChromaSearchResult
+    _HAS_CHROMA = True
+except ImportError:
+    ChromaStore = None  # type: ignore[assignment]
+    ChromaSearchResult = None  # type: ignore[assignment]
+    _HAS_CHROMA = False
+
 __all__ = [
     # models
     "EmbeddingModel",
@@ -85,6 +93,9 @@ __all__ = [
     # supabase
     "SupabaseVectorStore",
     "SupabaseDistanceMetric",
+    # chroma
+    "ChromaStore",
+    "ChromaSearchResult",
     # cache
     "EmbeddingCache",
     "CachedEntry",
