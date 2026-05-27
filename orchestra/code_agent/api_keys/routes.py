@@ -12,6 +12,7 @@ SUPPORTED_PROVIDERS = {
     "openai", "anthropic", "gemini", "groq", "mistral",
     "cohere", "together", "fireworks", "perplexity",
     "stripe", "sendgrid", "twilio", "github", "openrouter",
+    "moonshot",
 }
 
 
@@ -99,6 +100,7 @@ def register_api_key_routes(app: Any) -> None:
                 "anthropic": "ANTHROPIC_API_KEY",
                 "gemini": "GEMINI_API_KEY",
                 "groq": "GROQ_API_KEY",
+                "moonshot": "MOONSHOT_API_KEY",
             }
             env_key = os.environ.get(env_map.get(provider, ""), "")
             if env_key:

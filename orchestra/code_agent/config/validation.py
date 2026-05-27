@@ -29,6 +29,9 @@ class OrchestraSettings(BaseSettings):
     stripe_secret_key: str = Field(default="", alias="STRIPE_SECRET_KEY")
     stripe_webhook_secret: str = Field(default="", alias="STRIPE_WEBHOOK_SECRET")
 
+    # AI Provider Keys
+    moonshot_api_key: str = Field(default="", alias="MOONSHOT_API_KEY")
+
     # Database
     database_url: str = Field(default="sqlite:///orchestra_billing.db", alias="DATABASE_URL")
 
