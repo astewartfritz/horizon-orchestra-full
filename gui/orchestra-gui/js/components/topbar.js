@@ -10,14 +10,15 @@
   let pollInterval = null;
 
   const pageTitles = {
-    '#/':         { parent: 'Workspace', current: 'Home' },
-    '#/chat':     { parent: 'Workspace', current: 'Chat' },
-    '#/tasks':    { parent: 'Workspace', current: 'Tasks' },
-    '#/agents':   { parent: 'Intelligence', current: 'Agents' },
-    '#/coord':    { parent: 'Intelligence', current: 'Coordination' },
-    '#/tools':    { parent: 'Intelligence', current: 'Tools' },
-    '#/terminal': { parent: 'System', current: 'Terminal' },
-    '#/settings': { parent: 'System', current: 'Settings' },
+    '#/':           { parent: 'Workspace',    current: 'Home' },
+    '#/chat':       { parent: 'Workspace',    current: 'Chat' },
+    '#/tasks':      { parent: 'Workspace',    current: 'Tasks' },
+    '#/agents':     { parent: 'Intelligence', current: 'Agents' },
+    '#/coord':      { parent: 'Intelligence', current: 'Coordination' },
+    '#/tools':      { parent: 'Intelligence', current: 'Tools' },
+    '#/verticals':  { parent: 'Intelligence', current: 'Verticals' },
+    '#/terminal':   { parent: 'System',       current: 'Terminal' },
+    '#/settings':   { parent: 'System',       current: 'Settings' },
   };
 
   function badgeAttr() {

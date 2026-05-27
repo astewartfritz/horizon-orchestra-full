@@ -385,6 +385,41 @@
 .app.collapsed .nav-item .label,
 .app.collapsed .nav-item .nav-badge { display: none; }
 
+/* ── Expandable nav groups ─────────────────────────────────────────── */
+.nav-expand-wrap { display: flex; flex-direction: column; }
+
+.nav-expand { cursor: pointer; user-select: none; }
+.nav-expand__chevron {
+  margin-left: auto;
+  display: flex; align-items: center;
+  color: var(--text-3);
+  transition: transform 0.2s var(--ease);
+  flex-shrink: 0;
+}
+.nav-expand.is-open .nav-expand__chevron { transform: rotate(90deg); }
+
+.nav-sub {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.22s var(--ease);
+}
+.nav-sub.is-open { max-height: 140px; }
+
+.nav-sub-item {
+  padding-left: calc(var(--s-3) + 26px);
+  height: 30px;
+  font-size: 12.5px;
+}
+.nav-sub-dot {
+  font-size: 8px;
+  margin-right: var(--s-2);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.app.collapsed .nav-expand__chevron { display: none; }
+.app.collapsed .nav-sub { display: none; }
+
 .sidebar__footer {
   padding: var(--s-3);
   border-top: 1px solid var(--border-subtle);

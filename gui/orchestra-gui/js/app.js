@@ -35,16 +35,18 @@
 
   // ── Router ────────────────────────────────────────────────────────────────
   const routes = {
-    '#/':          'chat',
-    '':            'chat',
-    '#/home':      'home',
-    '#/chat':      'chat',
-    '#/tasks':     'tasks',
-    '#/agents':    'agents',
-    '#/coord':     'agents',
-    '#/tools':     'agents',
-    '#/terminal':  'terminal',
-    '#/settings':  'settings',
+    '#/':           'chat',
+    '':             'chat',
+    '#/home':       'home',
+    '#/chat':       'chat',
+    '#/tasks':      'tasks',
+    '#/agents':     'agents',
+    '#/coord':      'agents',
+    '#/tools':      'agents',
+    '#/verticals':  'verticals',
+    '#/terminal':   'terminal',
+    '#/settings':   'settings',
+    '#/mail':       'mail',
   };
 
   function routeKey(hash) {
