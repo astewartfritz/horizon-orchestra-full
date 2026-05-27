@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,29 @@ from .models import (
     DiagnosisCode, Encounter, Gender, Patient, ProcedureCode, SOAPNote,
 )
 
+try:
+    from orchestra.code_agent.memory.cross_vertical.hooks import (
+        on_healthcare_patient_created,
+        on_healthcare_encounter_created,
+        on_healthcare_claim_created,
+    )
+    _CV_HOOKS = True
+except Exception:
+    _CV_HOOKS = False
+
 DB_PATH = Path.home() / ".orchestra_healthcare.db"
+
+# Audit log (set externally by orchestra.audit.integration.enable_healthcare_audit)
+_audit_log: Any = None  # Optional[AuditLog]; set at runtime
+_audit_tables = {
+    "patients": "patient", "appointments": "appointment",
+    "encounters": "encounter", "claims": "claim",
+}
+
+def _audit(record_id: str, op: str, data: dict[str, Any], actor: str = "system") -> None:
+    if _audit_log is not None:
+        _audit_log.append("healthcare", record_id, op, data, actor=actor)
+
 
 # PHI fields encrypted at rest with AES-128 (Fernet) via API_KEY_ENCRYPTION_KEY.
 # Name fields are left plaintext to preserve LIKE search; all clinical data is encrypted.
@@ -42,7 +64,7 @@ def _dec(value: str) -> str:
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _new_id() -> str:
@@ -197,6 +219,9 @@ def create_patient(data: dict[str, Any], user_id: str = "") -> Patient:
              _enc(p.emergency_contact), _enc(p.allergies), _enc(p.medications),
              _enc(p.notes), p.created_at, user_id),
         )
+    if _CV_HOOKS:
+        on_healthcare_patient_created(p)
+    _audit(p.id, "CREATE", {"first_name": p.first_name, "last_name": p.last_name, "dob": p.dob})
     return p
 
 
@@ -241,12 +266,15 @@ def update_patient(patient_id: str, data: dict[str, Any]) -> Patient | None:
              p.insurance_group, p.emergency_contact, p.allergies, p.medications,
              p.notes, patient_id),
         )
+    _audit(patient_id, "UPDATE", data)
     return p
 
 
 def delete_patient(patient_id: str) -> bool:
     with _conn() as con:
         cur = con.execute("DELETE FROM patients WHERE id=?", (patient_id,))
+    if cur.rowcount > 0:
+        _audit(patient_id, "DELETE", {"deleted": True})
     return cur.rowcount > 0
 
 
@@ -285,6 +313,7 @@ def create_appointment(data: dict[str, Any], user_id: str = "") -> Appointment:
             (a.id, a.patient_id, a.patient_name, a.date, a.time, a.duration_min,
              a.reason, a.status.value, a.provider, a.room, a.notes, a.created_at, user_id),
         )
+    _audit(a.id, "CREATE", {"patient_id": a.patient_id, "date": a.date, "reason": a.reason})
     return a
 
 
@@ -313,6 +342,7 @@ def list_appointments(date: str = "", patient_id: str = "", status: str = "", us
 def update_appointment_status(appt_id: str, status: str) -> Appointment | None:
     with _conn() as con:
         con.execute("UPDATE appointments SET status=? WHERE id=?", (status, appt_id))
+    _audit(appt_id, "UPDATE", {"status": status})
     return get_appointment(appt_id)
 
 
@@ -372,6 +402,9 @@ def create_encounter(data: dict[str, Any], user_id: str = "") -> Encounter:
              _json.dumps([c.to_dict() for c in cpt]),
              soap.raw_notes, e.claim_id, e.created_at, user_id),
         )
+    if _CV_HOOKS:
+        on_healthcare_encounter_created(e)
+    _audit(e.id, "CREATE", {"patient_id": e.patient_id, "date": e.date, "provider": e.provider})
     return e
 
 
@@ -400,6 +433,7 @@ def update_encounter_soap(enc_id: str, soap_data: dict[str, Any]) -> Encounter |
              soap_data.get("raw_notes", enc.soap.raw_notes),
              enc_id),
         )
+    _audit(enc_id, "UPDATE", {"soap_fields": list(soap_data.keys())})
     return get_encounter(enc_id)
 
 
@@ -467,6 +501,9 @@ def create_claim(data: dict[str, Any], user_id: str = "") -> Claim:
              c.insurance_name, c.insurance_id, c.status.value, c.denial_reason,
              c.submitted_at, c.paid_at, c.created_at, user_id),
         )
+    if _CV_HOOKS:
+        on_healthcare_claim_created(c)
+    _audit(c.id, "CREATE", {"patient_id": c.patient_id, "total_charge": c.total_charge})
     return c
 
 
@@ -514,6 +551,7 @@ def update_claim(claim_id: str, data: dict[str, Any]) -> Claim | None:
              c.provider_name, _json.dumps(c.diagnosis_codes), _json.dumps(c.procedure_codes),
              c.total_charge, claim_id),
         )
+    _audit(claim_id, "UPDATE", data)
     return c
 
 
@@ -522,7 +560,7 @@ def update_claim(claim_id: str, data: dict[str, Any]) -> Claim | None:
 def get_analytics() -> dict[str, Any]:
     with _conn() as con:
         total_patients = con.execute("SELECT COUNT(*) FROM patients").fetchone()[0]
-        today = datetime.utcnow().date().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         todays_appts = con.execute(
             "SELECT COUNT(*) FROM appointments WHERE date=?", (today,)
         ).fetchone()[0]

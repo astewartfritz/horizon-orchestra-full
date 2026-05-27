@@ -3,9 +3,16 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+_audit_log: Any = None  # Optional[AuditLog]; set by enable_finance_audit()
+
+def _audit(record_id: str, op: str, data: dict[str, Any], actor: str = "system") -> None:
+    if _audit_log is not None:
+        _audit_log.append("finance", record_id, op, data, actor=actor)
+
 
 _DB_PATH = Path.home() / ".orchestra_finance.db"
 
@@ -72,7 +79,7 @@ def init_db() -> None:
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _today() -> str:
@@ -91,6 +98,7 @@ def create_portfolio(data: dict) -> dict:
     }
     with _conn() as c:
         c.execute("INSERT INTO portfolios VALUES (:id,:name,:description,:benchmark,:created_at)", row)
+    _audit(row["id"], "CREATE", {"name": row["name"], "benchmark": row["benchmark"]})
     return row
 
 
@@ -148,6 +156,10 @@ def upsert_position(data: dict) -> dict:
                 "INSERT INTO positions VALUES (:id,:portfolio_id,:ticker,:name,:shares,:avg_cost,:asset_class,:sector,:notes,:opened_date,:created_at)",
                 row,
             )
+    # Audit the upsert result
+    op = "UPDATE" if existing else "CREATE"
+    _audit(row["id"], op, {"ticker": ticker, "shares": row["shares"], "avg_cost": row["avg_cost"],
+                           "portfolio_id": pid})
     return row
 
 
@@ -167,12 +179,16 @@ def update_position(pos_id: str, data: dict) -> Optional[dict]:
     with _conn() as c:
         c.execute(f"UPDATE positions SET {sql} WHERE id=?", (*fields.values(), pos_id))
         r = c.execute("SELECT * FROM positions WHERE id=?", (pos_id,)).fetchone()
+    _audit(pos_id, "UPDATE", data)
     return dict(r) if r else None
 
 
 def delete_position(pos_id: str) -> bool:
     with _conn() as c:
-        return c.execute("DELETE FROM positions WHERE id=?", (pos_id,)).rowcount > 0
+        n = c.execute("DELETE FROM positions WHERE id=?", (pos_id,)).rowcount
+    if n > 0:
+        _audit(pos_id, "DELETE", {"deleted": True})
+    return n > 0
 
 
 def add_transaction(data: dict) -> dict:
@@ -193,6 +209,8 @@ def add_transaction(data: dict) -> dict:
             "INSERT INTO port_transactions VALUES (:id,:portfolio_id,:ticker,:type,:shares,:price,:amount,:date,:notes,:created_at)",
             row,
         )
+    _audit(row["id"], "CREATE", {"portfolio_id": row["portfolio_id"], "ticker": row["ticker"],
+                                  "type": row["type"], "amount": row["amount"]})
     return row
 
 
@@ -235,6 +253,7 @@ def create_deal(data: dict) -> dict:
             "INSERT INTO deals VALUES (:id,:company,:sector,:stage,:size_m,:ev_multiple,:source,:lead,:description,:status,:next_step,:next_step_date,:created_at,:updated_at)",
             row,
         )
+    _audit(row["id"], "CREATE", {"company": row["company"], "stage": row["stage"], "size_m": row["size_m"]})
     return row
 
 
@@ -260,12 +279,16 @@ def update_deal(deal_id: str, data: dict) -> Optional[dict]:
     with _conn() as c:
         c.execute(f"UPDATE deals SET {sql} WHERE id=?", (*fields.values(), deal_id))
         r = c.execute("SELECT * FROM deals WHERE id=?", (deal_id,)).fetchone()
+    _audit(deal_id, "UPDATE", data)
     return dict(r) if r else None
 
 
 def delete_deal(deal_id: str) -> bool:
     with _conn() as c:
-        return c.execute("DELETE FROM deals WHERE id=?", (deal_id,)).rowcount > 0
+        n = c.execute("DELETE FROM deals WHERE id=?", (deal_id,)).rowcount
+    if n > 0:
+        _audit(deal_id, "DELETE", {"deleted": True})
+    return n > 0
 
 
 def get_deal_analytics() -> dict:

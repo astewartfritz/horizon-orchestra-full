@@ -2,11 +2,29 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from typing import Any
+
 from orchestra.code_agent.legal.models import Client, Matter, TimeEntry, Invoice, TrustEntry
+
+_audit_log: Any = None  # Optional[AuditLog]; set by enable_legal_audit()
+
+def _audit(record_id: str, op: str, data: dict[str, Any], actor: str = "system") -> None:
+    if _audit_log is not None:
+        _audit_log.append("legal", record_id, op, data, actor=actor)
+
+try:
+    from orchestra.code_agent.memory.cross_vertical.hooks import (
+        on_legal_client_created,
+        on_legal_matter_created,
+        on_legal_invoice_created,
+    )
+    _CV_HOOKS = True
+except Exception:
+    _CV_HOOKS = False
 
 _DB_PATH = Path.home() / ".orchestra_legal.db"
 
@@ -130,7 +148,7 @@ def init_db() -> None:
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _today() -> str:
@@ -158,6 +176,9 @@ def create_client(data: dict, user_id: str = "") -> Client:
             (c.id, c.name, c.email, _enc(c.phone), c.company, _enc(c.address),
              c.client_since, _enc(c.notes), c.created_at, user_id),
         )
+    if _CV_HOOKS:
+        on_legal_client_created(c)
+    _audit(c.id, "CREATE", {"name": c.name, "email": c.email, "company": c.company})
     return c
 
 
@@ -195,6 +216,7 @@ def update_client(client_id: str, data: dict) -> Optional[Client]:
     set_clause = ", ".join(f"{k}=?" for k in fields)
     with _conn() as conn:
         conn.execute(f"UPDATE clients SET {set_clause} WHERE id=?", (*fields.values(), client_id))
+    _audit(client_id, "UPDATE", data)
     return get_client(client_id)
 
 
@@ -244,6 +266,9 @@ def create_matter(data: dict, user_id: str = "") -> Matter:
              m.description, m.opposing_party, m.court_jurisdiction,
              m.statute_of_limitations, m.opened_date, m.closed_date, m.created_at, user_id),
         )
+    if _CV_HOOKS:
+        on_legal_matter_created(m)
+    _audit(m.id, "CREATE", {"client_id": m.client_id, "title": m.title, "matter_type": m.matter_type})
     return m
 
 
@@ -280,6 +305,7 @@ def update_matter(matter_id: str, data: dict) -> Optional[Matter]:
     set_clause = ", ".join(f"{k}=?" for k in fields)
     with _conn() as conn:
         conn.execute(f"UPDATE matters SET {set_clause} WHERE id=?", (*fields.values(), matter_id))
+    _audit(matter_id, "UPDATE", data)
     return get_matter(matter_id)
 
 
@@ -301,10 +327,13 @@ def create_time_entry(data: dict) -> TimeEntry:
     )
     with _conn() as conn:
         conn.execute(
-            "INSERT INTO time_entries VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (te.id, te.matter_id, te.date, te.attorney, te.hours, te.rate,
+            """INSERT INTO time_entries
+               (id,matter_id,date,attorney,hours,rate,description,activity_code,billed,invoice_id,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+             (te.id, te.matter_id, te.date, te.attorney, te.hours, te.rate,
              te.description, te.activity_code, int(te.billed), te.invoice_id, te.created_at),
         )
+    _audit(te.id, "CREATE", {"matter_id": te.matter_id, "hours": te.hours, "rate": te.rate})
     return te
 
 
@@ -317,7 +346,8 @@ def list_time_entries(matter_id: str = "", billed: Optional[bool] = None) -> lis
     where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
     with _conn() as conn:
         rows = conn.execute(f"SELECT * FROM time_entries {where_sql} ORDER BY date DESC", params).fetchall()
-    return [TimeEntry(billed=bool(r["billed"]), **{k: v for k, v in dict(r).items() if k != "billed"}) for r in rows]
+    _skip = {"billed", "created_by"}
+    return [TimeEntry(billed=bool(r["billed"]), **{k: v for k, v in dict(r).items() if k not in _skip}) for r in rows]
 
 
 def update_time_entry(entry_id: str, data: dict) -> Optional[TimeEntry]:
@@ -328,14 +358,18 @@ def update_time_entry(entry_id: str, data: dict) -> Optional[TimeEntry]:
     set_clause = ", ".join(f"{k}=?" for k in fields)
     with _conn() as conn:
         conn.execute(f"UPDATE time_entries SET {set_clause} WHERE id=?", (*fields.values(), entry_id))
+    _audit(entry_id, "UPDATE", data)
     with _conn() as conn:
         row = conn.execute("SELECT * FROM time_entries WHERE id=?", (entry_id,)).fetchone()
-    return TimeEntry(billed=bool(row["billed"]), **{k: v for k, v in dict(row).items() if k != "billed"}) if row else None
+    _skip2 = {"billed", "created_by"}
+    return TimeEntry(billed=bool(row["billed"]), **{k: v for k, v in dict(row).items() if k not in _skip2}) if row else None
 
 
 def delete_time_entry(entry_id: str) -> bool:
     with _conn() as conn:
         c = conn.execute("DELETE FROM time_entries WHERE id=?", (entry_id,))
+    if c.rowcount > 0:
+        _audit(entry_id, "DELETE", {"deleted": True})
     return c.rowcount > 0
 
 
@@ -373,7 +407,10 @@ def create_invoice_from_matter(matter_id: str) -> Invoice:
     )
     with _conn() as conn:
         conn.execute(
-            "INSERT INTO invoices VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            """INSERT INTO invoices
+               (id,matter_id,client_id,invoice_number,status,issue_date,due_date,
+                subtotal,tax,total,paid_amount,notes,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (inv.id, inv.matter_id, inv.client_id, inv.invoice_number, inv.status,
              inv.issue_date, inv.due_date, inv.subtotal, inv.tax, inv.total,
              inv.paid_amount, inv.notes, inv.created_at),
@@ -383,6 +420,9 @@ def create_invoice_from_matter(matter_id: str) -> Invoice:
                 "UPDATE time_entries SET billed=1, invoice_id=? WHERE id=?",
                 [(inv.id, e.id) for e in entries],
             )
+    if _CV_HOOKS:
+        on_legal_invoice_created(inv)
+    _audit(inv.id, "CREATE", {"matter_id": matter_id, "subtotal": inv.subtotal, "total": inv.total})
     return inv
 
 
@@ -395,7 +435,7 @@ def list_invoices(status: str = "", matter_id: str = "") -> list[Invoice]:
     where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
     with _conn() as conn:
         rows = conn.execute(f"SELECT * FROM invoices {where_sql} ORDER BY created_at DESC", params).fetchall()
-    return [Invoice(**dict(r)) for r in rows]
+    return [Invoice(**{k: v for k, v in dict(r).items() if k != "created_by"}) for r in rows]
 
 
 def update_invoice(invoice_id: str, data: dict) -> Optional[Invoice]:
@@ -406,9 +446,10 @@ def update_invoice(invoice_id: str, data: dict) -> Optional[Invoice]:
     set_clause = ", ".join(f"{k}=?" for k in fields)
     with _conn() as conn:
         conn.execute(f"UPDATE invoices SET {set_clause} WHERE id=?", (*fields.values(), invoice_id))
+    _audit(invoice_id, "UPDATE", data)
     with _conn() as conn:
         row = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
-    return Invoice(**dict(row)) if row else None
+    return Invoice(**{k: v for k, v in dict(row).items() if k != "created_by"}) if row else None
 
 
 # ── Trust Ledger ──────────────────────────────────────────────────────────────
