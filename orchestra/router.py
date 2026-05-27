@@ -454,6 +454,70 @@ class ModelRouter:
         """Return all registered Gemma 4 model keys."""
         return [k for k in self.models if self.is_gemma4(k)]
 
+    async def route_healthy(
+        self,
+        task_type: str,
+        circuit_breaker: Any | None = None,
+        constraints: dict[str, Any] | None = None,
+    ) -> str:
+        """Like :meth:`route`, but skips models whose circuit is OPEN.
+
+        When *circuit_breaker* is provided, each candidate model is
+        checked and removed if its circuit is open.  Falls back to the
+        plain :meth:`route` result only if every candidate is on an open
+        circuit — guaranteeing a model is always returned.
+        """
+        if circuit_breaker is None:
+            return self.route(task_type, constraints)
+
+        constraints = constraints or {}
+        epsilon = 0.001
+        candidates: list[tuple[str, float]] = []
+
+        for name, cfg in self.models.items():
+            if constraints.get("require_tools") and not cfg.supports_tools:
+                continue
+            if constraints.get("require_vision") and not cfg.supports_vision:
+                continue
+            if cfg.cost_input > constraints.get("max_cost_input", float("inf")):
+                continue
+            if cfg.cost_output > constraints.get("max_cost_output", float("inf")):
+                continue
+            if "providers" in constraints and cfg.provider not in constraints["providers"]:
+                continue
+            if cfg.api_key_env and not os.environ.get(cfg.api_key_env):
+                continue
+
+            # Skip models on open circuits
+            try:
+                from orchestra.resilience.circuit_breaker import CircuitState as _CS
+                state = await circuit_breaker.get_state(cfg.provider, name)
+                if state == _CS.OPEN:
+                    log.debug("route_healthy: skipping %s — circuit OPEN", name)
+                    continue
+            except Exception:
+                pass  # if check fails, treat model as healthy
+
+            has_strength = task_type in cfg.strengths
+            if has_strength:
+                avg_cost = (cfg.cost_input + cfg.cost_output) / 2
+                score = 1000.0 / (avg_cost + epsilon)
+            else:
+                score = 0.1
+            candidates.append((name, score))
+
+        if not candidates:
+            log.warning(
+                "route_healthy: all candidates OPEN for task_type=%r; falling back to route()",
+                task_type,
+            )
+            return self.route(task_type, constraints)
+
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        best = candidates[0][0]
+        log.debug("route_healthy task_type=%r -> %s (score=%.3f)", task_type, best, candidates[0][1])
+        return best
+
     def register(self, name: str, config: ModelConfig) -> None:
         """Register a new model (or override an existing one)."""
         self.models[name] = config
