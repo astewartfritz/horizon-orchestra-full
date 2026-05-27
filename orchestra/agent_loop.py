@@ -24,6 +24,13 @@ from .router import ModelRouter
 
 # ── Parsing integration (lazy — no hard dependency) ──────────────────────────
 try:
+    from .checkpoint import CheckpointStore as _CheckpointStore, WorkflowCheckpoint as _WorkflowCheckpoint
+    _CHECKPOINT_AVAILABLE = True
+except Exception:
+    _CheckpointStore = _WorkflowCheckpoint = None  # type: ignore
+    _CHECKPOINT_AVAILABLE = False
+
+try:
     from .parsing.json_healer import JSONHealer as _JSONHealer
     from .parsing.tool_call_fixer import ToolCallFixer as _ToolCallFixer
     from .parsing.hallucination_scrubber import HallucinationScrubber as _HallucinScrubber
@@ -248,10 +255,16 @@ class AgentLoop:
         router: ModelRouter,
         tools: ToolRegistry,
         config: AgentConfig | None = None,
+        checkpoint_store: Any | None = None,
+        job_id: str | None = None,
     ) -> None:
         self.router = router
         self.tools = tools
         self.config = config or AgentConfig()
+        # Checkpoint support: persist messages after each iteration so a
+        # crashed workflow can resume rather than restarting from scratch.
+        self._checkpoint_store = checkpoint_store
+        self._job_id = job_id
 
     async def _structured_think(self, task: str, client: Any, model_id: str) -> str:
         """Make one focused reasoning pass before acting.
@@ -307,20 +320,33 @@ class AgentLoop:
             if thinking_text:
                 yield ThinkingEvent(iteration=0, content=thinking_text)
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self.config.system_prompt},
-        ]
-        if context:
-            messages.append({
-                "role": "user",
-                "content": f"Prior context:\n\n{context}\n\nTask: {task}",
-            })
-        else:
-            messages.append({"role": "user", "content": task})
-
+        # ── Checkpoint resume ─────────────────────────────────────────────
+        start_iteration = 1
         total_tool_calls = 0
+        if self._checkpoint_store is not None and self._job_id is not None:
+            _cp = self._checkpoint_store.load(self._job_id)
+        else:
+            _cp = None
 
-        for iteration in range(1, self.config.max_iterations + 1):
+        if _cp is not None:
+            messages = _cp.messages
+            start_iteration = _cp.iteration + 1
+            total_tool_calls = _cp.total_tool_calls
+            log.info(
+                "Resuming job %s from iteration %d (%d tool calls already done)",
+                self._job_id, start_iteration, total_tool_calls,
+            )
+        else:
+            messages = [{"role": "system", "content": self.config.system_prompt}]
+            if context:
+                messages.append({
+                    "role": "user",
+                    "content": f"Prior context:\n\n{context}\n\nTask: {task}",
+                })
+            else:
+                messages.append({"role": "user", "content": task})
+
+        for iteration in range(start_iteration, self.config.max_iterations + 1):
             # ── Resilience: check circuit breaker before API call ──────────────
             provider = getattr(self.router.models.get(self.config.model), "provider", "unknown")
             if _RESILIENCE_AVAILABLE and _circuit_breaker is not None:
@@ -416,9 +442,16 @@ class AgentLoop:
                     total_iterations=iteration,
                     total_tool_calls=total_tool_calls,
                 )
+                # Clean up checkpoint on successful completion
+                if self._checkpoint_store is not None and self._job_id is not None:
+                    try:
+                        self._checkpoint_store.delete(self._job_id)
+                    except Exception:
+                        pass
                 return
 
-            # ── Execute tool calls (may be parallel) ──────────────────────
+            # ── Parse all tool arguments first (fast, no I/O) ─────────────
+            parsed_calls: list[tuple[Any, dict[str, Any]]] = []
             for tc in assistant_msg.tool_calls:
                 try:
                     args = json.loads(tc.function.arguments)
@@ -438,7 +471,10 @@ class AgentLoop:
                             args = {}
                     else:
                         args = {}
+                parsed_calls.append((tc, args))
 
+            # ── Emit ToolCallEvents before dispatching ─────────────────────
+            for tc, args in parsed_calls:
                 yield ToolCallEvent(
                     iteration=iteration,
                     tool_name=tc.function.name,
@@ -446,24 +482,42 @@ class AgentLoop:
                     tool_call_id=tc.id,
                 )
 
-                t0 = time.monotonic()
-                result = await self.tools.execute(tc.function.name, args, tc.id)
-                elapsed = time.monotonic() - t0
-                total_tool_calls += 1
+            # ── Execute all tool calls in parallel ─────────────────────────
+            _t_tools = time.monotonic()
+            tool_results = await asyncio.gather(*[
+                self.tools.execute(tc.function.name, args, tc.id)
+                for tc, args in parsed_calls
+            ])
+            _tools_elapsed = time.monotonic() - _t_tools
+            total_tool_calls += len(tool_results)
 
+            # ── Emit results and append tool messages ──────────────────────
+            for (tc, _args), result in zip(parsed_calls, tool_results):
                 yield ToolResultEvent(
                     iteration=iteration,
                     tool_name=tc.function.name,
-                    result=result.result[:500],  # truncate for events
+                    result=result.result[:500],
                     success=result.success,
-                    duration=elapsed,
+                    duration=_tools_elapsed,
                 )
-
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
                     "content": result.result,
                 })
+
+            # ── Checkpoint after each iteration ────────────────────────────
+            if self._checkpoint_store is not None and self._job_id is not None:
+                try:
+                    self._checkpoint_store.save(_WorkflowCheckpoint(
+                        job_id=self._job_id,
+                        task=task,
+                        messages=messages,
+                        iteration=iteration,
+                        total_tool_calls=total_tool_calls,
+                    ))
+                except Exception as _cp_exc:
+                    log.warning("Checkpoint save failed: %s", _cp_exc)
 
         # Max iterations reached
         yield ErrorEvent(
