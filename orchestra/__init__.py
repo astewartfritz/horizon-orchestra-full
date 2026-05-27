@@ -321,6 +321,30 @@ try:
 except ImportError:
     pass
 
+# ── Audit Log ──────────────────────────────────────────────────────────────────
+try:
+    from .audit import AuditEntry, AuditLog, AuditVerifier, verify_db
+except ImportError:
+    pass
+
+# ── Hardware Design ────────────────────────────────────────────────────────────
+try:
+    from .hardware import (
+        Instruction, InstructionFormat, Opcode, Register,
+        RegisterConvention, ISA, RISCV_ISA, CUSTOM_ISA,
+        DatapathComponent, RegisterFile, ALU, PipelineStage,
+        Pipeline, Datapath, FIVE_STAGE_PIPELINE,
+        PortDirection, Port, Module, Wire, Assignment, RTLSpec,
+        DesignProposal, DesignIteration, EvaluationResult, ResearchDB,
+        ExplorationResult, HardwareDesignAgent,
+        FitnessMetric, FitnessScore, FitnessEvaluator,
+        SynthesisResult, SynthesisTool, YosysSynthesis,
+        SimulationResult, SimulationTool, IverilogSimulation,
+        TargetTechnology, FPGATarget, MappingResult, TechnologyMapper,
+    )
+except ImportError:
+    pass
+
 # ── Environment Validation (lazy — no side effects on import) ───────────────────
 
 __all__ = [
@@ -412,6 +436,20 @@ __all__ = [
     "SupabaseVectorStore", "SupabaseDistanceMetric",
     # embeddings
     "EmbeddingCache", "CachedEntry",
+    # audit log
+    "AuditEntry", "AuditLog", "AuditVerifier", "verify_db",
+    # hardware design
+    "Instruction", "InstructionFormat", "Opcode", "Register",
+    "RegisterConvention", "ISA", "RISCV_ISA", "CUSTOM_ISA",
+    "DatapathComponent", "RegisterFile", "ALU", "PipelineStage",
+    "Pipeline", "Datapath", "FIVE_STAGE_PIPELINE",
+    "PortDirection", "Port", "Module", "Wire", "Assignment", "RTLSpec",
+    "DesignProposal", "DesignIteration", "EvaluationResult", "ResearchDB",
+    "ExplorationResult", "HardwareDesignAgent",
+    "FitnessMetric", "FitnessScore", "FitnessEvaluator",
+    "SynthesisResult", "SynthesisTool", "YosysSynthesis",
+    "SimulationResult", "SimulationTool", "IverilogSimulation",
+    "TargetTechnology", "FPGATarget", "MappingResult", "TechnologyMapper",
 ]
 
 # ── code_agent subpackage (migrated from src/code_agent/) ─────────────────────
