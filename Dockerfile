@@ -15,7 +15,9 @@ FROM python:3.13-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid 1001 orchestra && \
+    useradd --uid 1001 --gid orchestra --shell /bin/bash --create-home orchestra
 
 WORKDIR /workspace
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
@@ -23,9 +25,13 @@ COPY --from=builder /app/src /app/src
 COPY --from=builder /app/entrypoint.py /entrypoint.py
 COPY src/ /app/src/
 
+RUN chown -R orchestra:orchestra /workspace /app
+
 ENV PYTHONPATH=/app/src:$PYTHONPATH
 ENV PYTHONUNBUFFERED=1
 ENV ORCHESTRA_LOG_LEVEL=info
+
+USER orchestra
 
 EXPOSE 8000
 

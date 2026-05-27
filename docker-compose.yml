@@ -1,11 +1,87 @@
 version: "3.9"
 
+# ── Networks ──────────────────────────────────────────────────────────────────
+# Explicit internal network so services are isolated from the default bridge.
+networks:
+  orchestra_net:
+    driver: bridge
+
 services:
+  # ── Redis — broker + result backend for Celery; also used by RedisBackend ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - orchestra_net
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Celery worker — long-running data jobs ─────────────────────────────────
+  celery-worker:
+    build: .
+    image: orchestra:latest
+    command: >
+      celery -A orchestra.queue.celery_app:celery_app worker
+      --loglevel=${LOG_LEVEL:-info}
+      --concurrency=${CELERY_CONCURRENCY:-4}
+      --queues=embeddings,science,llm,reports,default
+      --hostname=worker@%h
+    networks:
+      - orchestra_net
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ORCHESTRA_LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - orchestra_data:/workspace
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 1G
+
+  # ── Flower — Celery monitoring dashboard (optional) ────────────────────────
+  flower:
+    image: mher/flower:2.0
+    command: celery flower --broker=redis://redis:6379/0 --port=5555
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    networks:
+      - orchestra_net
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      # Start with: docker compose --profile monitoring up
+      - monitoring
+
+  # ── Orchestra server ───────────────────────────────────────────────────────
   orchestra:
     build: .
     image: orchestra:latest
     ports:
       - "${ORCHESTRA_PORT:-8000}:8000"
+    networks:
+      - orchestra_net
     environment:
       - ORCHESTRA_HOST=0.0.0.0
       - ORCHESTRA_PORT=8000
@@ -21,14 +97,23 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-hash}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
-      - orchestra_data:/workspace/.agent-skills.db
-      - orchestra_data:/workspace/.agent-skills-v2.db
-      - orchestra_data:/workspace/.agent-sessions
+      - orchestra_data:/workspace
     depends_on:
       ollama:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
       interval: 15s
@@ -36,15 +121,25 @@ services:
       retries: 3
       start_period: 30s
 
+  # ── Ollama (local LLM) ─────────────────────────────────────────────────────
   ollama:
     image: ollama/ollama:latest
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
+    networks:
+      - orchestra_net
     environment:
       - OLLAMA_KEEP_ALIVE=-1m
     volumes:
       - ollama_models:/root/.ollama
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+        reservations:
+          memory: 2G
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
       interval: 10s
@@ -52,6 +147,36 @@ services:
       retries: 5
       start_period: 40s
 
+  # ── Tailscale sidecar — secure tunnel from cloud → this machine ────────────
+  # Set TAILSCALE_AUTHKEY in .env (ephemeral key from tailscale.com/settings/keys).
+  # Once up, your dev machine appears at https://<machine>.tail-<net>.ts.net:8000
+  # Remove / comment this service if you don't use Tailscale.
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: orchestra-dev
+    networks:
+      - orchestra_net
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY:-}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=true
+      # Expose only the Orchestra port through the tunnel
+      - TS_SERVE_CONFIG=/etc/tailscale/serve.json
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - ./tailscale-serve.json:/etc/tailscale/serve.json:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    restart: unless-stopped
+    profiles:
+      # Only starts when you explicitly request it:
+      #   docker compose --profile tunnel up
+      - tunnel
+
 volumes:
   ollama_models:
   orchestra_data:
+  tailscale_state:
+  redis_data:
