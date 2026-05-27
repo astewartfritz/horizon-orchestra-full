@@ -5,12 +5,13 @@ import json
 import time
 from typing import Any
 
+from fastapi import Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+
 from orchestra.code_agent.dashboard.metrics import get_metrics
 
 
 def register_dashboard_routes(app: Any, prefix: str = "/dashboard") -> None:
-    from fastapi import Request
-    from fastapi.responses import HTMLResponse, StreamingResponse
 
     @app.get(prefix, response_class=HTMLResponse)
     async def dashboard_page():

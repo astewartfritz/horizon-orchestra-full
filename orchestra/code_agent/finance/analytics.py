@@ -93,7 +93,7 @@ class MonteCarloSimulation:
                 path.append(path[-1] * (1 + ret))
             results.append(path)
         # Aggregate
-        percentiles = {p: [] for p in [5, 25, 50, 75, 95]}
+        percentiles = {p: [] for p in [1, 5, 25, 50, 75, 95, 99]}
         for step in range(steps + 1):
             vals = sorted(r[step] for r in results)
             for p in percentiles:

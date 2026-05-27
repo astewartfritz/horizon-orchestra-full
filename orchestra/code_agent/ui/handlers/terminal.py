@@ -14,22 +14,25 @@ import sys
 import uuid
 from typing import Any
 
+from fastapi import Request
+from pydantic import BaseModel
+
 _log = logging.getLogger("orchestra.terminal")
+
+
+class _TerminalRunRequest(BaseModel):
+    command: str
+    workdir: str = ""
+    timeout: int = 30000  # ms
 
 
 def register_terminal_routes(app: Any) -> None:
     try:
-        from fastapi import Request, WebSocket, WebSocketDisconnect
+        from fastapi import WebSocket, WebSocketDisconnect
         from fastapi.responses import JSONResponse
-        from pydantic import BaseModel
     except ImportError:
         _log.warning("FastAPI/Pydantic not available — terminal routes skipped")
         return
-
-    class TerminalRunRequest(BaseModel):
-        command: str
-        workdir: str = ""
-        timeout: int = 30000  # ms
 
     def _ok(data: Any) -> dict:
         return {"data": data, "error": None}
@@ -44,7 +47,7 @@ def register_terminal_routes(app: Any) -> None:
 
     # ── REST handler (shared) ─────────────────────────────────────────────────
 
-    async def _run_command(body: TerminalRunRequest) -> Any:
+    async def _run_command(body: _TerminalRunRequest) -> Any:
         import time as _tm
 
         workdir = body.workdir or os.getcwd()
@@ -187,15 +190,11 @@ def register_terminal_routes(app: Any) -> None:
     # ── Register at /api/terminal/* and /v1/terminal/* ────────────────────────
 
     @app.post("/api/terminal/run")
-    async def api_terminal_run(body: TerminalRunRequest, request: Request) -> Any:
+    async def api_terminal_run(body: _TerminalRunRequest, request: Request) -> Any:
         return await _run_command(body)
 
-    @app.websocket("/api/terminal/ws")
-    async def api_terminal_ws(websocket: WebSocket) -> None:
-        await _ws_handler(websocket)
-
     @app.post("/v1/terminal/run")
-    async def v1_terminal_run(body: TerminalRunRequest, request: Request) -> Any:
+    async def v1_terminal_run(body: _TerminalRunRequest, request: Request) -> Any:
         return await _run_command(body)
 
     @app.websocket("/v1/terminal/ws")
