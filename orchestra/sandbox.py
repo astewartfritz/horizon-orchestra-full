@@ -34,7 +34,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing
+from typing import Any
+
 # ── Guardian: every code execution passes through security ─────────────────
 try:
     from .guardian.code_guard import CodeGuard as _CodeGuard
@@ -45,7 +46,6 @@ try:
 except Exception:
     _GUARD = _LEDGER = None  # type: ignore
     _GUARDIAN_ACTIVE = False
- import Any
 
 __all__ = [
     "SandboxManager",
@@ -137,6 +137,7 @@ class Sandbox:
         code: str,
         language: str = "python",
         timeout: int | None = None,
+        agent_id: str = "",
     ) -> ExecResult:
         """Write code to a temp file and execute it.
 
@@ -147,7 +148,6 @@ class Sandbox:
             import asyncio as _asyncio
             _scan = _asyncio.run(_GUARD.scan(code, language, agent_id or "sandbox"))
             if _scan.blocked:
-                from .sandbox import ExecResult
                 return ExecResult(
                     exit_code=1,
                     stdout="",

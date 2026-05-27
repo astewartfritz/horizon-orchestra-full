@@ -136,7 +136,7 @@ try:
                 "market_cap": int(info.get("marketCap", 0) or 0),
                 "name": info.get("shortName", ""),
             }}
-        except: result[sym] = {{"error": "failed"}}
+        except Exception: result[sym] = {{"error": "failed"}}
     print(json.dumps(result))
 except Exception as e:
     print(json.dumps({{"error": str(e)}}))
@@ -280,7 +280,7 @@ try:
                 "change": round(price - prev, 2) if prev else 0,
                 "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
             }}
-        except: pass
+        except Exception: pass
     print(json.dumps(result))
 except Exception as e:
     print(json.dumps({{"error": str(e)}}))

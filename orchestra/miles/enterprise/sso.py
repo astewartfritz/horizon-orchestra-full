@@ -852,7 +852,7 @@ def _parse_saml_datetime(val: str) -> float:
 
 def _iso(ts: float) -> str:
     import datetime
-    return datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _scim_filter(users: list[SCIMUser], filter_str: str) -> list[SCIMUser]:

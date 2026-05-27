@@ -204,7 +204,7 @@ class WebSocketRelay:
             for conn in connections
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        success_count = sum(1 for r in results if r is True)
+        success_count = sum(1 for r in results if r == True)
         logger.debug(
             "broadcast_to_user: user_id=%s connections=%d sent=%d",
             user_id,

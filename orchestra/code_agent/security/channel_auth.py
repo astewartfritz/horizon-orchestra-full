@@ -84,7 +84,7 @@ class ChannelAuth:
                 return AuthResult(AuthDecision.DENIED, user_id, "restricted", "User not in allowlist")
 
         # Mention gating for group chats
-        if not is_dm and mention is False:
+        if not is_dm and not mention:
             return AuthResult(AuthDecision.PENDING, user_id, "restricted", "Bot must be mentioned")
 
         # DM pairing

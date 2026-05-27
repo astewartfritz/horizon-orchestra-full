@@ -68,7 +68,7 @@ try:
             }})
             total_value += current_value
             total_cost += cost
-        except: pass
+        except Exception: pass
 
     # Compute weights
     for h in holdings:

@@ -306,7 +306,7 @@ class MarketClient:
                 v  = vols[i]   if i < len(vols)   and vols[i]   is not None else 0
                 if None in (o, h, l, cl):
                     continue
-                date = datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+                date = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).strftime("%Y-%m-%d")
                 candles.append(_candle(date, o, h, l, cl, int(v or 0)))
             return candles
         except Exception as exc:

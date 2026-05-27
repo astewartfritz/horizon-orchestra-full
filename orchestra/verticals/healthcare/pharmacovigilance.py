@@ -1071,11 +1071,11 @@ class PharmacovigilanceAgent:
         rationale: List[str] = []
 
         # WHO-UMC decision tree
-        if rechallenge is True and temporal and not alternative:
+        if rechallenge and temporal and not alternative:
             category = WHOCausality.CERTAIN
             rationale.append("Positive rechallenge with plausible time relationship")
             rationale.append("No alternative explanation identified")
-        elif temporal and dechallenge is True and known and not alternative:
+        elif temporal and dechallenge and known and not alternative:
             category = WHOCausality.PROBABLE
             rationale.append("Plausible time relationship with positive dechallenge")
             rationale.append("Known reaction; no alternative explanation")

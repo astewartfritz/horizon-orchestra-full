@@ -562,7 +562,7 @@ class _DangerousNodeVisitor(ast.NodeVisitor):
             if module == "subprocess" and attr in {"Popen", "call", "run", "check_call", "check_output"}:
                 for kw in node.keywords:
                     if kw.arg == "shell":
-                        if isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                        if isinstance(kw.value, ast.Constant) and kw.value.value == True:
                             self.threats.append(CodeThreat.COMMAND_INJECTION)
 
             # getattr/setattr on sensitive modules

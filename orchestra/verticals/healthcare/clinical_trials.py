@@ -546,9 +546,9 @@ class ClinicalTrialAgent:
         # Causality heuristic
         causality = CausalityAssessment.POSSIBLE
         time_h = ae_data.get("time_to_onset_hours")
-        if ae_data.get("rechallenge") is True:
+        if ae_data.get("rechallenge") == True:
             causality = CausalityAssessment.CERTAIN
-        elif ae_data.get("dechallenge") is True and time_h and time_h < 72:
+        elif ae_data.get("dechallenge") == True and time_h and time_h < 72:
             causality = CausalityAssessment.PROBABLE
         elif time_h and time_h > 720:
             causality = CausalityAssessment.UNLIKELY

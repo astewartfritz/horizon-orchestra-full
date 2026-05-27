@@ -144,4 +144,13 @@ def get_all_tools() -> list[type[Tool]]:
     except ImportError:
         pass
 
+    try:
+        from orchestra.code_agent.tools.terraform import TERRAFORM_TOOLS
+        # Terraform tools use the function-dict schema rather than the Tool class
+        # pattern; they are registered separately by callers that support it.
+        # Here we just ensure the module is importable.
+        _ = TERRAFORM_TOOLS
+    except ImportError:
+        pass
+
     return CORE_TOOLS + extra

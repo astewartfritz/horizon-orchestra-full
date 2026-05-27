@@ -93,7 +93,7 @@ try:
                         "sector": g("sector", ""),
                     }})
                     if len(results) >= {limit}: break
-            except: pass
+            except Exception: pass
         if len(results) >= {limit}: break
 
     results.sort(key=lambda x: x.get("market_cap", 0), reverse=True)
